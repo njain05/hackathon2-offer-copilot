@@ -77,6 +77,20 @@ def audience_chats(offer: dict) -> list[int]:
     return out
 
 
+def no_offer_message(profile: dict) -> str:
+    """What a shopper sees when no personal discount is given: a useful nudge, never the seller's reasoning."""
+    lines = ["No personal discount today, but here's what's waiting for you:"]
+    if profile["cart_items"]:
+        n = profile["cart_items"]
+        lines.append(f"🛒 {n} item{'s' if n > 1 else ''} still in your cart.")
+    if profile["points_expiring"]:
+        lines.append(f"⭐ {profile['points_expiring']} of your {profile['reward_points']} points expire soon. Use them on your next order.")
+    if len(lines) == 1:
+        lines = ["No personal discount today."]
+    lines.append("\nSee deals for everyone with /offers.")
+    return "\n".join(lines)
+
+
 def decision_keyboard(offer_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[InlineKeyboardButton("✅ Allow", callback_data=f"allow:{offer_id}"),
                                   InlineKeyboardButton("❌ Reject", callback_data=f"reject:{offer_id}")]])
@@ -131,8 +145,8 @@ async def offer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("🔍 Looking at your history…")
     res = await asyncio.to_thread(recommender.offer_for_customer, DATA, SEGS, rules(), cid)
     if res["offer"] is None:
-        await update.message.reply_text(
-            f"No discount today. Keep an eye on /offers for public deals.\n\n<i>{escape(res['explanation'])}</i>", parse_mode=HTML)
+        log.info("No offer for %s: %s", cid, res["explanation"])  # seller-side reasoning stays out of the customer chat
+        await update.message.reply_text(no_offer_message(res["profile"]), parse_mode=HTML)
         return
     oid = store.add_offer({**res["offer"], "status": "approved"})  # already validated inside offer_for_customer
     stored = store.get_offer(oid)

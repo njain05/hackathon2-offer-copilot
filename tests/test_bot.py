@@ -148,3 +148,12 @@ def test_export_includes_product_names_and_prices():
     [pub] = json.loads(store.PUBLIC.read_text())
     assert len(pub["products"]) == len(o["product_ids"])
     assert all(p["name"] and p["price"] > 0 for p in pub["products"])
+
+
+def test_no_offer_message_is_customer_friendly():
+    prof = {"cart_items": 1, "points_expiring": 11, "reward_points": 114}
+    text = bot.no_offer_message(prof)
+    assert "1 item still in your cart" in text and "11 of your 114 points" in text
+    for internal in ("margin", "segment", "loyal", "discount is not needed"):
+        assert internal not in text.lower()
+    assert bot.no_offer_message({"cart_items": 0, "points_expiring": 0, "reward_points": 0}).startswith("No personal discount today.")
