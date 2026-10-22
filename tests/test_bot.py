@@ -282,3 +282,17 @@ def test_main_block_is_last():
     """`python -m src.bot` runs main() at the __main__ line, so every handler must be defined above it."""
     lines = [l for l in open(bot.__file__, encoding="utf-8").read().splitlines() if l.strip()]
     assert lines[-2:] == ['if __name__ == "__main__":', "    main()"]
+
+
+def test_menu_buttons_open_the_right_feature():
+    u = msg_update(666)
+    join(u, "returning")
+    for label, expect in [(bot.MENU_PROFILE, "Orders"), (bot.MENU_DEALS, "No live deals"), (bot.MENU_HELP, "Shopper commands")]:
+        u.message.reply_text.reset_mock()
+        u.message.text = label
+        run(bot.other(u, ctx()))
+        assert expect in texts(u), label
+    u.message.reply_text.reset_mock()
+    u.message.text = "hello?"
+    run(bot.other(u, ctx()))
+    assert u.message.reply_text.call_args.kwargs["reply_markup"] is bot.MENU

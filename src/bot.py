@@ -13,7 +13,7 @@ from html import escape
 
 import pandas as pd
 from dotenv import load_dotenv
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
@@ -132,7 +132,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 InlineKeyboardButton("🆕 I'm new here", callback_data="who:new"),
                 InlineKeyboardButton("🛍 I've shopped before", callback_data="who:returning")]]))
         return
-    await update.message.reply_text(welcome_text(cid), parse_mode=HTML)
+    await update.message.reply_text(welcome_text(cid), parse_mode=HTML, reply_markup=MENU)
 
 
 def welcome_text(cid: str) -> str:
@@ -157,7 +157,7 @@ async def choose_identity(update: Update, kind: str) -> None:
         store.assign_shopper(chat_id, cid)
         log.info("New shopper chat -> %s (%s)", cid, kind)
     await q.edit_message_reply_markup(None)
-    await q.message.reply_text(welcome_text(cid), parse_mode=HTML)
+    await q.message.reply_text(welcome_text(cid), parse_mode=HTML, reply_markup=MENU)
 
 
 async def _shopper_or_hint(update: Update) -> str | None:
@@ -428,8 +428,18 @@ async def _deliver(context: ContextTypes.DEFAULT_TYPE, o: dict) -> int:
     return sent
 
 
+MENU_OFFER, MENU_DEALS, MENU_PROFILE, MENU_HELP = "🎁 My offer", "🔥 Today's deals", "👤 My profile", "❓ Help"
+MENU = ReplyKeyboardMarkup([[MENU_OFFER, MENU_DEALS], [MENU_PROFILE, MENU_HELP]], resize_keyboard=True, is_persistent=True,
+                           input_field_placeholder="Tap a button below")
+
+
 async def other(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("I only understand commands. Try /offer, /offers or /profile (or /help).")
+    """Shopper typed text: the menu buttons send their label as text."""
+    action = {MENU_OFFER: offer, MENU_DEALS: offers, MENU_PROFILE: profile, MENU_HELP: help_shopper}.get((update.message.text or "").strip())
+    if action:
+        await action(update, context)
+        return
+    await update.message.reply_text("Tap a button below to see your offer, today's deals or your profile.", reply_markup=MENU)
 
 
 
@@ -447,8 +457,21 @@ SELLER_COMMANDS = [("seller", seller), ("campaigns", campaigns), ("pending", pen
                    ("stats", stats), ("audit", audit), ("customer", customer)]
 
 
-def _app(token: str, commands: list, fallback) -> Application:
-    app = Application.builder().token(token).build()
+SHOPPER_MENU = [BotCommand("start", "Start shopping"), BotCommand("offer", "My personal offer"),
+                BotCommand("offers", "Today's deals"), BotCommand("profile", "My orders and points"), BotCommand("help", "Help")]
+SELLER_MENU = [BotCommand("campaigns", "Propose offers"), BotCommand("pending", "Offers waiting for you"), BotCommand("live", "Live offers"),
+               BotCommand("stats", "Results"), BotCommand("audit", "What the rules changed"), BotCommand("customer", "Offer for one customer"),
+               BotCommand("seller", "Unlock seller mode"), BotCommand("help", "Help")]
+
+
+def _app(token: str, commands: list, fallback, menu: list | None = None) -> Application:
+    async def post_init(app: Application) -> None:
+        if menu:
+            try:
+                await app.bot.set_my_commands(menu)  # Telegram's "/" menu button
+            except Exception as e:
+                log.warning("Could not set the command menu: %s", type(e).__name__)
+    app = Application.builder().token(token).post_init(post_init).build()
     for name, fn in commands:
         app.add_handler(CommandHandler(name, fn))
     app.add_handler(CallbackQueryHandler(button))
@@ -459,21 +482,23 @@ def _app(token: str, commands: list, fallback) -> Application:
 
 def build_app(token: str) -> Application:
     """Single bot doing both jobs."""
-    return _app(token, SHOPPER_COMMANDS + SELLER_COMMANDS + [("help", help_cmd)], seller_text)
+    return _app(token, SHOPPER_COMMANDS + SELLER_COMMANDS + [("help", help_cmd)], seller_text, SHOPPER_MENU)
 
 
 def build_customer_app(token: str) -> Application:
-    return _app(token, SHOPPER_COMMANDS + [("help", help_shopper)], other)
+    return _app(token, SHOPPER_COMMANDS + [("help", help_shopper)], other, SHOPPER_MENU)
 
 
 def build_seller_app(token: str) -> Application:
-    return _app(token, SELLER_COMMANDS + [("start", help_seller), ("help", help_seller)], seller_text)
+    return _app(token, SELLER_COMMANDS + [("start", help_seller), ("help", help_seller)], seller_text, SELLER_MENU)
 
 
 async def _run_all(apps: list[Application]) -> None:
     """Poll several bots in one event loop until Ctrl+C."""
     for app in apps:
         await app.initialize()
+        if app.post_init:
+            await app.post_init(app)
         await app.start()
         await app.updater.start_polling()
     try:
