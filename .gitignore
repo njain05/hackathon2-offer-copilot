@@ -7,3 +7,5 @@ data/state.json
 data/audit.jsonl
 .DS_Store
 web/offers.json
+data/demo_state.json
+data/demo_audit.jsonl

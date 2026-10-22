@@ -66,11 +66,12 @@ def active_personal_offer(cid: str) -> dict | None:
 def audience_chats(offer: dict) -> list[int]:
     """Classmate chats whose synthetic shopper is targeted by a public offer and opted in to marketing."""
     shoppers = store.all_shoppers()
+    seller = store.get_seller()
     seg = SEGS.set_index("customer_id").segment
     opted = DATA["customers"].set_index("customer_id").marketing_opt_in
     out = []
     for chat_id, cid in shoppers.items():
-        if not bool(opted.get(cid, False)):
+        if int(chat_id) == seller or not bool(opted.get(cid, False)):
             continue
         if offer["target"] in ("ALL", cid) or seg.get(cid) == offer["target"]:
             out.append(int(chat_id))
@@ -108,6 +109,9 @@ def is_seller(update: Update) -> bool:
 # ---------- customer mode ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
+    if is_seller(update):
+        await update.message.reply_text("🧑‍💼 This chat is the seller. Shopper features are for your customers. Send /help for seller commands.")
+        return
     cid = store.get_shopper(chat_id)
     if cid is None:
         cid = pick_shopper(store.assigned_ids())
@@ -189,9 +193,12 @@ async def seller(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Wrong seller code.")
         return
     store.set_seller(chat_id)
+    store.remove_shopper(chat_id)  # the seller is not a customer: no customer offers in this chat
     log.info("Seller chat registered")
     await update.message.reply_text(
-        "🧑‍💼 Seller mode on.\n/campaigns · /pending · /live · /stats · /audit · /customer &lt;name or id&gt;", parse_mode=HTML)
+        "🧑‍💼 Seller mode on. This chat now only gets seller cards, not customer offers.\n"
+        "/campaigns · /pending · /live · /stats · /audit · /customer &lt;name or id&gt;\n\n"
+        "<i>To see the customer side, open the bot from another Telegram account or ask a classmate to /start it.</i>", parse_mode=HTML)
 
 
 async def _seller_only(update: Update) -> bool:
@@ -216,7 +223,8 @@ async def campaigns(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     res = recommender.run_pipeline(DATA, r, cands)
     src = "🤖 AI agent" if ai else "📏 rule engine"
     await update.message.reply_text(
-        f"{src}: {len(res['stored'])} ready · {len(res['adjusted'])} adjusted by rules · {len(res['blocked'])} blocked\n"
+        f"{src}: {len(res['stored'])} ready · {len(res['adjusted'])} adjusted by rules · {len(res['blocked'])} blocked"
+        + (f" · {len(res['skipped'])} already pending or live" if res["skipped"] else "") + "\n"
         "Tap Allow to publish, Reject to drop. /audit shows what the rules changed.")
     new_ids = set(res["stored"] + res["adjusted"])
     await _send_cards(update, [o for o in store.get_offers("pending") if o["offer_id"] in new_ids])

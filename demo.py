@@ -14,6 +14,8 @@ strip = lambda s: re.sub(r"<[^>]+>", "", s)
 
 
 def main():
+    store.STATE = store.STATE.with_name("demo_state.json")  # never touch the live bot's data
+    store.AUDIT = store.AUDIT.with_name("demo_audit.jsonl")
     store.STATE.unlink(missing_ok=True); store.AUDIT.unlink(missing_ok=True)
     data, rules = load_all(), load_rules()
     segs = segment_customers(data)

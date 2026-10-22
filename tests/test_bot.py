@@ -157,3 +157,36 @@ def test_no_offer_message_is_customer_friendly():
     for internal in ("margin", "segment", "loyal", "discount is not needed"):
         assert internal not in text.lower()
     assert bot.no_offer_message({"cart_items": 0, "points_expiring": 0, "reward_points": 0}).startswith("No personal discount today.")
+
+
+def test_seller_chat_is_not_a_shopper():
+    u = msg_update(222)
+    run(bot.start(u, ctx()))                      # starts as a shopper...
+    assert store.get_shopper(222)
+    run(bot.seller(u, ctx("secret")))             # ...then becomes the seller
+    assert store.get_shopper(222) is None
+    run(bot.start(u, ctx()))
+    assert "This chat is the seller" in texts(u)
+    run(bot.campaigns(u, ctx()))
+    o = next(x for x in store.get_offers("pending") if x["target"] == "ALL")
+    c = ctx()
+    run(bot.button(press(222, f"allow:{o['offer_id']}"), c))
+    assert c.bot.send_message.await_count == 0    # no customer offer pushed into the seller chat
+
+
+def test_campaigns_twice_makes_no_duplicates():
+    seller = msg_update(222)
+    run(bot.seller(seller, ctx("secret")))
+    run(bot.campaigns(seller, ctx()))
+    first = len(store.get_offers())
+    run(bot.campaigns(seller, ctx()))
+    assert len(store.get_offers()) == first
+    assert "already pending or live" in texts(seller)
+
+
+def test_adjusted_offer_code_matches_final_discount():
+    from src import recommender
+    bad = recommender._offer("public", "MEGA MAKHANA BLAST", "Half price!", "ALL", ["P001", "P002"], 60, 5, "x", "y", source="ai_agent")
+    res = recommender.run_pipeline(bot.DATA, load_rules(), [bad])
+    o = store.get_offer(res["adjusted"][0])
+    assert o["discount_pct"] == 15 and o["code"] == "MEGA15"

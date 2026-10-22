@@ -48,14 +48,31 @@ def generate_candidates(data: dict, segs: pd.DataFrame, rules: dict) -> list[dic
     return out
 
 
+def _same_offer_active(c: dict) -> bool:
+    """An offer with this title and audience is already waiting for the seller or live."""
+    for o in store.get_offers():
+        if o["title"] == c["title"] and o["target"] == c["target"]:
+            if o["status"] == "pending" or (o["status"] == "approved" and o["valid_to"] >= TODAY.isoformat()):
+                return True
+    return False
+
+
+def _recode(code: str, old: int, new: int) -> str:
+    """DIWALI60 -> DIWALI15 when the rules change the discount."""
+    return code[: -len(str(old))] + str(new) if code.endswith(str(old)) else code
+
+
 def run_pipeline(data: dict, rules: dict, candidates: list[dict], history_fn=store.history_for) -> dict:
-    res = {"stored": [], "adjusted": [], "blocked": []}
+    res = {"stored": [], "adjusted": [], "blocked": [], "skipped": []}
     for c in candidates:
+        if _same_offer_active(c):
+            res["skipped"].append(c["title"])
+            continue
         v = validate_offer(c, data, rules, history_fn(c["target"]) if c["target"].startswith("C0") else [])
         if v.ok:
             res["stored"].append(store.add_offer(c))
         elif v.adjusted_offer:
-            a = {**v.adjusted_offer, "rationale": c["rationale"] + f" (Rules lowered the discount from {c['discount_pct']}% to {v.adjusted_offer['discount_pct']}%.)"}
+            a = {**v.adjusted_offer, "code": _recode(c["code"], c["discount_pct"], v.adjusted_offer["discount_pct"]), "rationale": c["rationale"] + f" (Rules lowered the discount from {c['discount_pct']}% to {v.adjusted_offer['discount_pct']}%.)"}
             store.log_event("adjusted", {"source": c["source"], "title": c["title"], "proposed": c["discount_pct"], "final": a["discount_pct"], "reasons": v.reasons})
             res["adjusted"].append(store.add_offer(a))
         else:

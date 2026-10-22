@@ -102,6 +102,10 @@ def assign_shopper(chat_id: int, customer_id: str) -> None:
     s = _load(); s["shoppers"][str(chat_id)] = customer_id; _save(s)
 
 
+def remove_shopper(chat_id: int) -> None:
+    s = _load(); s["shoppers"].pop(str(chat_id), None); _save(s)
+
+
 def all_shoppers() -> dict[str, str]:
     """{chat_id: customer_id} for every classmate who pressed /start."""
     return dict(_load()["shoppers"])
