@@ -74,3 +74,27 @@ Propose 3-5 campaigns. target is "ALL" or one of the segment names. Use only pro
 message: customer-facing, max 35 words. rationale and expected_impact: one sentence each, for the seller."""
     out = _call(prompt, CAMPAIGNS_SCHEMA)
     return out["campaigns"] if out and out.get("campaigns") else None
+
+
+def assistant_turn(system: str, user: str, tools: list[dict]) -> dict | None:
+    """One seller-chat turn: {'reply': text} or {'tool': name, 'input': {...}} (at most one tool). None on failure."""
+    try:
+        import anthropic
+        msg = anthropic.Anthropic().beta.messages.create(
+            model=MODEL, max_tokens=16000, system=system, tools=tools,
+            tool_choice={"type": "auto", "disable_parallel_tool_use": True},
+            messages=[{"role": "user", "content": user}],
+            output_config={"effort": "medium"},
+            betas=["server-side-fallback-2026-07-01"], fallbacks="default",
+        )
+    except Exception as e:
+        log.warning("Seller chat call failed (%s): %s", type(e).__name__, str(e)[:200])
+        return None
+    use = next((b for b in msg.content if b.type == "tool_use"), None)
+    if use is not None:
+        return {"tool": use.name, "input": dict(use.input)}
+    if msg.stop_reason != "end_turn":
+        log.warning("Seller chat reply unusable: stop_reason=%s", msg.stop_reason)
+        return None
+    text = "".join(b.text for b in msg.content if b.type == "text").strip()
+    return {"reply": text} if text else None

@@ -50,7 +50,7 @@ segment_customers(data) -> pd.DataFrame   # customer_id, segment, recency, frequ
  "rationale": str,                      # WHY (shown to seller on the card)
  "expected_impact": str,                # short plain-English estimate
  "source": "rule_engine" | "ai_agent" | "seller_chat",
- "status": "pending" | "approved" | "rejected" | "blocked",
+ "status": "pending" | "approved" | "rejected" | "blocked" | "ended",   # ended = seller took a live offer down
  "blocked_reasons": [str],              # filled when rules reject
  "created_at": iso timestamp, "decided_at": iso timestamp | None,
  "is_welcome": bool (optional),          # first-order welcome offer (personal); checked by rules first_order section
@@ -101,9 +101,18 @@ Telegram bot (python-telegram-bot v21). Commands: /start, /offers (generate+send
 Callback data: `allow:<offer_id>` / `reject:<offer_id>`. Allow => re-validate => set_status approved => export_public_offers.
 Env: TELEGRAM_BOT_TOKEN (customer bot), SELLER_BOT_TOKEN (optional separate seller bot; both run in one process), SELLER_CODE (/seller <code> unlocks seller mode).
 
-## src/chat.py
+## src/chat.py (seller chat in plain language)
 ```python
-suggest_for_customer(query: str, data, segments, rules, history) -> dict   # {customer, stats_summary, offer(validated), explanation}
+interpret(text, data, segs, rules) -> {"reply": str} | {"tool": name, "input": dict} | None   # one Claude call; None = no AI
+TOOLS = [suggest_for_customer, draft_offer, run_campaigns, show_stats, list_offers, end_offer, change_rule]
+# The bot executes the tool with the same rule-checked code as the slash commands:
+# draft_offer -> run_pipeline -> Allow/Reject card; change_rule / end_offer -> Confirm button first.
+```
+
+## src/rules.py (editing)
+```python
+describe_change(key, value, category="", rules=None) -> (preview: str, error: str | None)
+apply_change(key, value, category="", path=rules.yaml) -> preview   # rewrites one number, keeps comments; refuses unsafe values
 ```
 
 ## web/offers.html

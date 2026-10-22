@@ -17,9 +17,12 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
-from src import agent, messages, recommender, store
+import re
+import secrets
+
+from src import agent, chat, messages, recommender, store
 from src.data_loader import ROOT, TODAY, load_all
-from src.rules import load_rules, validate_offer
+from src.rules import apply_change, describe_change, load_rules, validate_offer
 from src.segments import segment_customers
 
 logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s: %(message)s", level=logging.INFO)
@@ -29,6 +32,7 @@ log = logging.getLogger("offer_copilot")
 HTML = ParseMode.HTML
 TWO_BOTS = False      # set in main(): separate seller bot
 CUSTOMER_BOT = None   # the bot that messages shoppers (used when the seller bot approves an offer)
+PENDING_RULES: dict[str, tuple[str, int, str]] = {}  # confirm-button token -> (rule, value, category)
 DATA = load_all()
 SEGS = segment_customers(DATA)
 
@@ -330,6 +334,10 @@ async def customer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not q:
         await update.message.reply_text("Usage: /customer Rohit  or  /customer C0042")
         return
+    await customer_report(update, q)
+
+
+async def customer_report(update: Update, q: str) -> None:
     m = find_customers(q)
     if m.empty:
         await update.message.reply_text("No match.")
@@ -361,6 +369,9 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     act, _, oid = (q.data or "").partition(":")
     if act == "who":
         await choose_identity(update, oid)
+        return
+    if act in ("ruleok", "endok", "cancel"):
+        await confirm_button(update, act, oid)
         return
     o = store.get_offer(oid)
     if o is None:
@@ -421,9 +432,6 @@ async def other(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("I only understand commands. Try /offer, /offers or /profile (or /help).")
 
 
-async def other_seller(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("I only understand commands. Try /campaigns, /pending or /customer &lt;name&gt; (or /help).", parse_mode=HTML)
-
 
 async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     log.error("Handler error: %r", context.error, exc_info=context.error)
@@ -451,7 +459,7 @@ def _app(token: str, commands: list, fallback) -> Application:
 
 def build_app(token: str) -> Application:
     """Single bot doing both jobs."""
-    return _app(token, SHOPPER_COMMANDS + SELLER_COMMANDS + [("help", help_cmd)], other)
+    return _app(token, SHOPPER_COMMANDS + SELLER_COMMANDS + [("help", help_cmd)], seller_text)
 
 
 def build_customer_app(token: str) -> Application:
@@ -459,7 +467,7 @@ def build_customer_app(token: str) -> Application:
 
 
 def build_seller_app(token: str) -> Application:
-    return _app(token, SELLER_COMMANDS + [("start", help_seller), ("help", help_seller)], other_seller)
+    return _app(token, SELLER_COMMANDS + [("start", help_seller), ("help", help_seller)], seller_text)
 
 
 async def _run_all(apps: list[Application]) -> None:
@@ -502,3 +510,121 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+# ---------- seller chat in plain language ----------
+def md_to_html(text: str) -> str:
+    """Claude may answer with **bold**; Telegram HTML wants <b>."""
+    return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", escape(text, quote=False))
+
+
+def confirm_keyboard(act: str, token: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[InlineKeyboardButton("✅ Confirm", callback_data=f"{act}:{token}"),
+                                  InlineKeyboardButton("✖️ Cancel", callback_data=f"cancel:{token}")]])
+
+
+async def seller_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Plain-language message from the seller: Claude answers, or picks one action that we carry out here."""
+    if not is_seller(update):
+        if TWO_BOTS:
+            await update.message.reply_text("🧑‍💼 Seller console. Send /seller <code> to unlock it.")
+        else:
+            await other(update, context)
+        return
+    await update.effective_chat.send_action("typing")
+    res = await asyncio.to_thread(chat.interpret, update.message.text, DATA, SEGS, rules())
+    if res is None:
+        await update.message.reply_text("I can't read free text right now (AI unavailable). Send /help to see the commands.")
+        return
+    if "reply" in res:
+        await update.message.reply_text(md_to_html(res["reply"]), parse_mode=HTML)
+        return
+    await run_seller_action(update, context, res["tool"], res["input"])
+
+
+async def run_seller_action(update: Update, context: ContextTypes.DEFAULT_TYPE, tool: str, args: dict) -> None:
+    log.info("Seller chat action: %s", tool)
+    if tool == "suggest_for_customer":
+        await customer_report(update, args.get("query", ""))
+    elif tool == "draft_offer":
+        await draft_from_chat(update, args)
+    elif tool == "run_campaigns":
+        await campaigns(update, context)
+    elif tool == "show_stats":
+        await stats(update, context)
+    elif tool == "list_offers":
+        await (live if args.get("which") == "live" else pending)(update, context)
+    elif tool == "end_offer":
+        o = store.get_offer(args.get("offer_id", ""))
+        if o is None or not is_live(o):
+            await update.message.reply_text("I couldn't find that live offer. /live lists them.")
+            return
+        await update.message.reply_text(f"Take <b>{escape(o['title'])}</b> ({o['discount_pct']}% off) down? Customers will stop seeing it.",
+                                        parse_mode=HTML, reply_markup=confirm_keyboard("endok", o["offer_id"]))
+    elif tool == "change_rule":
+        key, value, cat = args.get("rule", ""), int(args.get("new_value", 0)), args.get("category", "")
+        preview, err = describe_change(key, value, cat, rules())
+        if err:
+            await update.message.reply_text(f"🛡 Can't change that: {escape(err)}", parse_mode=HTML)
+            return
+        token = secrets.token_hex(4)
+        PENDING_RULES[token] = (key, value, cat)
+        await update.message.reply_text(f"📝 Change the rules?\n<b>{escape(preview)}</b>\n\nNew offers are checked against the new limit.",
+                                        parse_mode=HTML, reply_markup=confirm_keyboard("ruleok", token))
+    else:
+        await update.message.reply_text("I'm not sure how to do that. Send /help to see what I can do.")
+
+
+async def draft_from_chat(update: Update, a: dict) -> None:
+    """Seller described an offer: rule-check it like any other proposal and show an Allow/Reject card."""
+    target = a.get("target", "ALL")
+    kind = "personal" if target in set(DATA["customers"].customer_id) else "public"
+    known = set(DATA["products"].product_id)
+    pids = [x for x in a.get("product_ids", []) if x in known]
+    days = max(1, min(int(a.get("valid_days", 7)), 60))
+    cand = recommender._offer(kind, a.get("title", "Special offer"), a.get("message", ""), target, pids, int(a.get("discount_pct", 0)),
+                              days, a.get("rationale", "Requested by the seller."), "Seller-requested offer", source="seller_chat")
+    res = recommender.run_pipeline(DATA, rules(), [cand])
+    if res["skipped"]:
+        await update.message.reply_text("An offer with that name for that audience is already waiting or live. /pending or /live.")
+        return
+    if res["blocked"]:
+        o = store.get_offer(res["blocked"][0])
+        reasons = "\n".join(f"• {escape(r)}" for r in o["blocked_reasons"])
+        await update.message.reply_text(f"🛡 The rules blocked this offer:\n{reasons}", parse_mode=HTML)
+        return
+    oid = (res["stored"] + res["adjusted"])[0]
+    if res["adjusted"]:
+        await update.message.reply_text(f"⚖️ You asked for {cand['discount_pct']}%, but that breaks a limit, so I lowered it to the highest allowed.")
+    await _send_cards(update, [store.get_offer(oid)])
+
+
+async def confirm_button(update: Update, act: str, token: str) -> None:
+    q = update.callback_query
+    if update.effective_chat.id != store.get_seller():
+        await q.answer("Seller only", show_alert=True)
+        return
+    await q.answer()
+    if act == "cancel":
+        PENDING_RULES.pop(token, None)
+        await q.edit_message_text(q.message.text_html + "\n\n✖️ Cancelled", parse_mode=HTML)
+        return
+    if act == "endok":
+        o = store.get_offer(token)
+        if o is None or not is_live(o):
+            await q.edit_message_text(q.message.text_html + "\n\nAlready ended.", parse_mode=HTML)
+            return
+        store.set_status(token, "ended")
+        await q.edit_message_text(q.message.text_html + "\n\n⏹ <b>Ended</b>: removed from the offers page.", parse_mode=HTML)
+        return
+    change = PENDING_RULES.pop(token, None)
+    if change is None:
+        await q.edit_message_text(q.message.text_html + "\n\nThis request expired. Ask me again.", parse_mode=HTML)
+        return
+    try:
+        done = apply_change(*change)
+    except ValueError as e:
+        await q.edit_message_text(q.message.text_html + f"\n\n🛡 Not changed: {escape(str(e))}", parse_mode=HTML)
+        return
+    store.log_event("rule_change", {"source": "seller_chat", "change": done, "reasons": [done]})
+    await q.edit_message_text(q.message.text_html + "\n\n✅ <b>Updated rules.yaml</b>", parse_mode=HTML)

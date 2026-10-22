@@ -19,6 +19,15 @@ Two Telegram bots, one program: a **customer bot** (classmates use it; this is t
 
 **Seller bot** — `/seller <SELLER_CODE>` once, then `/campaigns` (proposes offers, each checked by `rules.yaml`, sent as cards with ✅ Allow / ❌ Reject) · `/pending` · `/live` · `/stats` · `/audit` (offers the rules lowered or blocked) · `/customer <name or id>`.
 
+**Talk to the seller bot in plain English** (needs `ANTHROPIC_API_KEY`). Examples:
+- "What should I offer Rohit?" → his profile and a suggested offer with Allow / Reject
+- "Make a Diwali deal: 15% off almonds and cashews for everyone till 8 Nov" → a draft, rule-checked (Nuts are capped at 12%, so it is lowered and you are told why), with Allow / Reject
+- "Can I give 25% on gift boxes?" → an answer from the rules
+- "Raise the Makhana limit to 18%" → shows the change, updates `rules.yaml` only after you tap Confirm (unsafe values are refused)
+- "Stop the Navratri deal" / "How are my offers doing?"
+
+Nothing goes live from a chat message alone: drafts need Allow, rule changes and ending an offer need Confirm.
+
 Allow re-checks the offer against the current `rules.yaml`, publishes it to `web/offers.json` and sends it, through the customer bot, to every customer it targets. You can use both bots from your own Telegram account to see both sides.
 
 ## Offers page

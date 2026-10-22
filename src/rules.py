@@ -119,3 +119,56 @@ def validate_offer(offer: dict, data: dict, rules: dict, history: list[dict] | N
             adjusted = {**offer, "discount_pct": new_d}
     reasons = disc_reasons + other
     return ValidationResult(ok=not reasons, reasons=reasons, adjusted_offer=adjusted)
+
+
+# ---------- editing rules.yaml from the seller chat (keeps every comment) ----------
+EDITABLE = {  # key: (section, plain-English name, lowest, highest)
+    "max_discount_pct": ("global", "Highest discount on any offer (%)", 1, 50),
+    "min_margin_pct_after_discount": ("global", "Lowest profit margin after discount (%)", 0, 60),
+    "cooldown_days_per_customer": ("global", "Days between personal offers to one customer", 0, 60),
+    "max_offers_per_customer_per_month": ("global", "Personal offers per customer per month", 1, 10),
+    "min_stock_for_offer": ("global", "Minimum stock to promote a product (units)", 0, 1000),
+    "welcome_discount_pct": ("first_order", "First-order welcome discount (%)", 1, 50),
+    "min_order_value": ("first_order", "Minimum basket for the welcome offer (₹)", 0, 10000),
+}
+
+
+def describe_change(key: str, value: int, category: str = "", rules: dict | None = None) -> tuple[str, str | None]:
+    """Plain-English preview of a rule change, and an error if it is not allowed."""
+    rules = rules or load_rules()
+    value = int(value)
+    if key == "category_cap":
+        caps = rules.get("category_caps_pct", {})
+        if category not in caps:
+            return "", f"Unknown category '{category}'. Categories: {', '.join(caps)}"
+        top = int(rules["global"]["max_discount_pct"])
+        if not 0 <= value <= top:
+            return "", f"A category limit must be between 0% and the overall limit of {top}%"
+        return f"{category} discount limit: {caps[category]}% → {value}%", None
+    if key not in EDITABLE:
+        return "", f"'{key}' can't be changed from chat"
+    section, name, lo, hi = EDITABLE[key]
+    if not lo <= value <= hi:
+        return "", f"{name} must be between {lo} and {hi}"
+    if key == "max_discount_pct":
+        over = [c for c, v in rules.get("category_caps_pct", {}).items() if v > value]
+        if over:
+            return "", f"{', '.join(over)} have higher category limits than {value}%; lower those first"
+    return f"{name}: {rules[section][key]} → {value}", None
+
+
+def apply_change(key: str, value: int, category: str = "", path: str | Path = ROOT / "rules.yaml") -> str:
+    """Write one number into rules.yaml, keeping layout and comments. Returns the preview text."""
+    preview, err = describe_change(key, value, category, load_rules(path))
+    if err:
+        raise ValueError(err)
+    import re
+    name = category if key == "category_cap" else key
+    text = Path(path).read_text(encoding="utf-8")
+    pattern = re.compile(rf"^(\s+{re.escape(name)}:\s*)(\S+)", re.M)
+    if len(pattern.findall(text)) != 1:
+        raise ValueError(f"Could not find exactly one '{name}' in rules.yaml")
+    new_text = pattern.sub(lambda m: m.group(1) + str(int(value)), text)
+    yaml.safe_load(new_text)  # refuse to write a broken file
+    Path(path).write_text(new_text, encoding="utf-8")
+    return preview
