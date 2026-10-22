@@ -575,6 +575,12 @@ def md_to_html(text: str) -> str:
     return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", escape(text, quote=False))
 
 
+def people_text(title: str, rows: list[dict]) -> str:
+    lines = [f"{i}. <b>{escape(r['name'])}</b> ({escape(r['city'])}, {r['customer_id']}) · {escape(r['group'])} · {r['orders']} orders · ₹{r['spend']:,}"
+             + ("" if r["opted_in"] else " · opted out") for i, r in enumerate(rows, 1)]
+    return f"👥 {escape(title)}\n" + "\n".join(lines) if rows else "No customers match."
+
+
 def confirm_keyboard(act: str, token: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[InlineKeyboardButton("✅ Confirm", callback_data=f"{act}:{token}"),
                                   InlineKeyboardButton("✖️ Cancel", callback_data=f"cancel:{token}")]])
@@ -606,10 +612,22 @@ async def run_seller_action(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     elif tool == "draft_offer":
         await draft_from_chat(update, args)
     elif tool == "draft_group_offer":
-        f = {k: args.get(k) for k in ("segments", "cities", "categories", "first_time_only", "with_cart")}
+        f = {k: args.get(k) for k in ("segments", "cities", "categories", "first_time_only", "with_cart", "rank_by", "limit")}
         o, sel = recommender.group_offer(DATA, SEGS, rules(), f, args.get("product_ids"), args.get("discount_pct", 0), args.get("valid_days", 7),
                                          args.get("title", ""), args.get("message", ""), args.get("rationale", ""), "seller_chat")
         await _pipeline_reply(update, o)
+    elif tool == "list_customers":
+        from src import audience
+        f = {k: args.get(k) for k in ("segments", "cities", "categories", "first_time_only", "with_cart", "rank_by", "limit")}
+        res = audience.find(DATA, SEGS, f, limit=min(int(f.get("limit") or 10), 25))
+        await update.message.reply_text(people_text(f"{res['label']}: {res['total']} customer(s), top {len(res['customers'])} {res['rank_by']}", res["customers"]), parse_mode=HTML)
+    elif tool == "offer_customers":
+        from src import audience
+        o = store.get_offer(args.get("offer_id", ""))
+        if o is None or not o.get("customer_ids"):
+            await update.message.reply_text("That offer isn't for a fixed list of customers (or I couldn't find it).")
+        else:
+            await update.message.reply_text(people_text(f"“{o['title']}” reaches {len(o['customer_ids'])} customers", audience.people(DATA, SEGS, o["customer_ids"], "spend", 25)), parse_mode=HTML)
     elif tool == "run_campaigns":
         await campaigns(update, context)
     elif tool == "show_stats":

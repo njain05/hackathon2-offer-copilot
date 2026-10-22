@@ -161,3 +161,25 @@ def test_chat_without_key_explains(monkeypatch):
     with pytest.raises(api.ApiError) as e:
         api.chat_turn({"text": "hi"})
     assert e.value.status == 503
+
+
+def test_top_n_group_offer_and_customer_lists(monkeypatch):
+    r = load_rules()
+    top = audience.select(bot.DATA, bot.SEGS, r, {"segments": ["champion", "loyal"], "rank_by": "spend", "limit": 10})
+    allowed = audience.select(bot.DATA, bot.SEGS, r, {"segments": ["champion", "loyal"]})
+    spend = bot.DATA["customers"].set_index("customer_id").lifetime_value
+    assert top["count"] == 10 and set(top["customer_ids"]) <= set(allowed["customer_ids"])
+    assert min(spend[top["customer_ids"]]) >= max(spend[[c for c in allowed["customer_ids"] if c not in top["customer_ids"]]])
+    assert top["label"].startswith("Top 10 by spend")
+    found = audience.find(bot.DATA, bot.SEGS, {"segments": ["champion"], "rank_by": "spend", "limit": 1})
+    assert len(found["customers"]) == 1 and found["customers"][0]["spend"] == spend[bot.SEGS[bot.SEGS.segment == "champion"].customer_id].max()
+
+    chat_as(monkeypatch, {"tool": "list_customers", "input": {"segments": ["champion", "loyal"], "cities": [], "categories": [],
+            "first_time_only": False, "with_cart": False, "rank_by": "spend", "limit": 5}})
+    res = api.chat_turn({"text": "show my top 5 loyal customers"})
+    assert len(res["customers"]) == 5 and res["customers"][0]["spend"] >= res["customers"][-1]["spend"]
+
+    o = api.create({"audience_mode": "group", "filters": {"segments": ["champion", "loyal"], "rank_by": "spend", "limit": 10},
+                    "product_ids": ["P011"], "discount_pct": 10, "valid_days": 14, "title": "Diwali thank you", "message": "x"})["offer"]
+    listed = api.offer_customers(o["offer_id"])
+    assert len(listed["customers"]) == 10 and [c["customer_id"] for c in listed["customers"]][0] in o["customer_ids"]

@@ -185,6 +185,8 @@
   .chat-card b { display: block; } .chat-card .note { margin: 2px 0 6px; }
   .suggest { display: flex; flex-wrap: wrap; gap: 6px; }
   .suggest button { font: inherit; font-size: 13px; border: 1px solid var(--hair); background: var(--canvas); color: var(--ink); border-radius: 999px; padding: 6px 10px; cursor: pointer; text-align: left; }
+  .people { align-self: stretch; border: 1px solid var(--hair); border-radius: 12px; overflow: auto; max-height: 300px; font-size: 13.5px; }
+  .people table { font-size: 13.5px; } .people th, .people td { padding: 6px 8px; } .people th { position: sticky; top: 0; background: var(--card); }
   .chat form { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--hair); }
   .chat form textarea { min-height: 42px; max-height: 120px; resize: none; }
 
@@ -340,6 +342,8 @@ function render(d) {
     el("div", { class: "insight" }, el("div", { class: "fig" }, inr(k.cart_value)),
       el("div", {}, el("p", {}, `sitting in ${k.carts_open} open carts.${slow.length ? ` Slow-moving stock: ${slow.join(", ")}.` : ""}`),
         el("p", { class: "act" }, "Customers with a cart get a small nudge when they tap ", el("b", {}, "My offer"), " in the customer bot."))));
+  // ask the chat straight from the brief
+  if (LIVE) brief.querySelectorAll("q").forEach(q => { q.style.cursor = "pointer"; q.title = "Ask Copilot"; q.addEventListener("click", () => { openChat(true); sendChat(q.textContent); }); });
 
   const delta = k.revenue_delta_pct;
   const strip = el("div", { class: "strip" }, ...[
@@ -564,7 +568,7 @@ function chipGroup(items, selected, onChange) {
 
 function renderWorkspace() {
   const o = OPTS;
-  const draft = { audience_mode: "group", filters: { segments: [], cities: [], categories: [], first_time_only: false, with_cart: false },
+  const draft = { audience_mode: "group", filters: { segments: [], cities: [], categories: [], first_time_only: false, with_cart: false, rank_by: "none", limit: 0 },
                   product_ids: [], discount_pct: 10, valid_days: 7, title: "", message: "" };
   const form = el("div", { class: "panel" });
   const count = el("div", { class: "count", "aria-live": "polite" }, "Pick who should get it.");
@@ -577,8 +581,13 @@ function renderWorkspace() {
       try {
         const a = await post("/api/audience", { filters: draft.filters });
         const left = [a.excluded_opt_out && `${a.excluded_opt_out} opted out`, a.excluded_cooldown && `${a.excluded_cooldown} got an offer recently`].filter(Boolean);
+        const who = el("button", { class: "btn small", type: "button", style: "margin-top:6px" }, "👥 Show them");
+        who.addEventListener("click", async () => {
+          const res = await post("/api/audience", { filters: draft.filters, with_people: true });
+          who.replaceWith(peopleTable(res.people || []));
+        });
         count.replaceChildren(el("b", {}, `${a.count} customers`), ` · ${a.label}`, left.length ? el("span", { class: "note" }, `Left out by the rules: ${left.join(", ")}`) : "",
-          a.sample.length ? el("span", { class: "note" }, `e.g. ${a.sample.join(", ")}`) : "");
+          a.sample.length ? el("span", { class: "note" }, `e.g. ${a.sample.join(", ")}`) : "", a.count ? who : "");
       } catch (e) { count.textContent = e.message; }
     }, 250);
   };
@@ -610,6 +619,15 @@ function renderWorkspace() {
         a.checked = f.first_time_only; b.checked = f.with_cart;
         a.addEventListener("change", () => { f.first_time_only = a.checked; updateCount(); }); b.addEventListener("change", () => { f.with_cart = b.checked; updateCount(); });
         return el("div", { class: "checks" }, el("label", {}, a, " First-time customers only"), el("label", {}, b, " Has items in cart")); })(),
+      (() => { // optional: only the top N
+        const n = el("input", { type: "number", id: "f-limit", min: 0, value: f.limit || "", placeholder: "all", style: "width:84px" });
+        const by = el("select", { id: "f-rank", "aria-label": "Rank customers by", style: "font:inherit;padding:8px;border-radius:10px;border:1px solid var(--hair);background:var(--canvas);color:var(--ink)" },
+          ...[["spend", "highest spend"], ["orders", "most orders"], ["recent", "most recent order"], ["cart", "most items in cart"]].map(([v, l]) => {
+            const o2 = el("option", { value: v }, l); if ((f.rank_by === "none" ? "spend" : f.rank_by) === v) o2.selected = true; return o2; }));
+        const upd = () => { f.limit = Number(n.value) || 0; f.rank_by = f.limit ? by.value : "none"; updateCount(); };
+        n.addEventListener("input", upd); by.addEventListener("change", upd);
+        return el("div", { class: "checks" }, el("label", { for: "f-limit" }, "Only the top "), n, el("span", {}, " customers by "), by);
+      })(),
     ] : [];
     const byCat = {}; o.products.forEach(p => (byCat[p.category] ||= []).push(p));
     const prodBox = el("div", {}, ...Object.entries(byCat).map(([cat, ps]) => el("div", { class: "prod-group" }, el("span", { class: "hint" }, cat),
@@ -724,11 +742,30 @@ function mdNodes(text) { // **bold** -> <b>, everything else as plain text (neve
   return String(text).split(/(\*\*[^*]+\*\*)/g).filter(Boolean).map(part => part.startsWith("**") ? el("b", {}, part.slice(2, -2)) : document.createTextNode(part));
 }
 function say(who, text) { const m = el("div", { class: `msg ${who}` }, ...mdNodes(text)); chatLog.append(m); chatLog.scrollTop = chatLog.scrollHeight; return m; }
+function peopleTable(rows) {
+  const t = el("table");
+  t.append(el("thead", {}, el("tr", {}, ...["#", "Customer", "Group", "Orders", "Spend", "Last order"].map((h, i) => el("th", i >= 3 ? { class: "num" } : {}, h)))));
+  t.append(el("tbody", {}, ...rows.map((r, i) => el("tr", {}, el("td", {}, i + 1),
+    el("td", {}, r.name, el("span", { class: "note" }, `${r.city} · ${r.customer_id}${r.opted_in ? "" : " · opted out"}`)),
+    el("td", {}, r.group), el("td", { class: "num" }, r.orders), el("td", { class: "num" }, inr(r.spend)),
+    el("td", { class: "num" }, r.last_order_days == null ? "never" : `${r.last_order_days}d ago`)))));
+  return el("div", { class: "people" }, t);
+}
 function offerCard(o) {
   const status = o.status === "approved" ? "live" : o.status;
   const who = o.audience_label ? `${o.audience_label} · ${o.customer_ids.length} customers` : o.target === "ALL" ? "Everyone" : o.target;
   return el("div", { class: "chat-card" }, el("b", {}, `${o.title} · ${o.discount_pct}% off`), el("span", { class: "note" }, `${who} · code ${o.code} · until ${fmtDate(o.valid_to)}`),
-    el("div", {}, o.message), status === "blocked" ? el("span", { class: "note" }, `🛡 ${o.blocked_reasons[0] || "Blocked"}`) : offerActions({ ...o, status }));
+    el("div", {}, o.message), status === "blocked" ? el("span", { class: "note" }, `🛡 ${o.blocked_reasons[0] || "Blocked"}`) : offerActions({ ...o, status }),
+    o.customer_ids && o.customer_ids.length ? seeCustomers(o) : "");
+}
+function seeCustomers(o) {
+  const b = el("button", { class: "btn small", type: "button", style: "margin-top:6px" }, `👥 See the ${o.customer_ids.length} customers`);
+  b.addEventListener("click", async () => {
+    b.disabled = true;
+    try { const r = await call("GET", `/api/offers/${o.offer_id}/customers`); b.replaceWith(peopleTable(r.customers)); }
+    catch (e) { toast(`⚠ ${e.message}`); b.disabled = false; }
+  });
+  return b;
 }
 function confirmCard(c) {
   const ok = el("button", { class: "btn small primary", type: "button" }, "Confirm"), no = el("button", { class: "btn small", type: "button" }, "Cancel");
@@ -751,6 +788,7 @@ async function sendChat(text) {
   try {
     const r = await post("/api/chat", { text, history: chatHistory.slice(-6) });
     wait.remove(); say("bot", r.text || "Done.");
+    if ((r.customers || []).length) chatLog.append(peopleTable(r.customers));
     (r.offers || []).forEach(o => chatLog.append(offerCard(o)));
     if (r.confirm) chatLog.append(confirmCard(r.confirm));
     chatHistory.push({ role: "seller", text }, { role: "assistant", text: r.text || "" });

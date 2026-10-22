@@ -23,6 +23,12 @@ def _tool(name: str, description: str, props: dict) -> dict:
             "input_schema": {"type": "object", "properties": props, "required": list(props), "additionalProperties": False}}
 
 
+FILTERS = {"segments": {"type": "array", "items": _S, "description": "segment keys, empty = any"},
+           "cities": {"type": "array", "items": _S}, "categories": {"type": "array", "items": _S, "description": "favourite categories"},
+           "first_time_only": {"type": "boolean"}, "with_cart": {"type": "boolean"},
+           "rank_by": {"type": "string", "enum": ["none", "spend", "orders", "recent", "cart"]},
+           "limit": {**_I, "description": "only the top N after ranking; 0 = everyone"}}
+
 TOOLS = [
     _tool("suggest_for_customer", "Look up one customer by name or id and suggest their personal offer.",
           {"query": {**_S, "description": "customer name or id, e.g. Rohit or C0042"}}),
@@ -34,11 +40,12 @@ TOOLS = [
            "rationale": {**_S, "description": "one sentence for the seller"}}),
     _tool("draft_group_offer", "Draft an offer for a specific group of customers, e.g. by city, favourite category, first-time buyers "
           "or open carts (combine with segments). Rule-checked and shown with Approve/Reject; NOT published.",
-          {"segments": {"type": "array", "items": _S, "description": "segment keys, empty = any"},
-           "cities": {"type": "array", "items": _S}, "categories": {"type": "array", "items": _S, "description": "favourite categories"},
-           "first_time_only": {"type": "boolean"}, "with_cart": {"type": "boolean"},
+          {**FILTERS,
            "product_ids": {"type": "array", "items": _S}, "discount_pct": _I, "valid_days": _I,
            "title": _S, "message": {**_S, "description": "customer-facing, max 35 words"}, "rationale": _S}),
+    _tool("list_customers", "Show the seller a ranked list of customers, e.g. 'my top 10 loyal customers', 'best customers in Ludhiana', "
+          "'who has items in their cart'. Use this whenever they want to SEE or contact customers.", FILTERS),
+    _tool("offer_customers", "Show which customers a group offer reaches.", {"offer_id": _S}),
     _tool("run_campaigns", "Analyse the business and propose a fresh set of campaigns.", {}),
     _tool("show_stats", "Show offer results: approved, pending, rejected, blocked.", {}),
     _tool("list_offers", "List offers waiting for approval or currently live.",
@@ -54,6 +61,10 @@ SYSTEM = """You are the assistant inside Offer Copilot's seller bot. The person 
 dry-fruit store Nishtha's Pantry and is not technical. Reply in short, plain English (use ₹), at most 80 words.
 Use a tool when they ask you to DO something; answer in text when they ask a question (including "can I...?" questions
 about the limits, which you answer from the rules below). Never claim an offer is live: drafts need the seller's Allow tap.
+You can show customer lists (list_customers, offer_customers): the data is synthetic, so names are fine to show.
+To give an offer to only the top N customers of a group, use draft_group_offer with rank_by and limit.
+"Top", "best" or "most loyal" customers means BOTH segments champion and loyal (unless the seller names one group);
+rank them by spend unless the seller says otherwise. For "my top customer" overall, use no segment filter, ranked by spend.
 When drafting, use exactly the discount the seller asked for, even if it is above a limit: the rules engine
 lowers it and shows the seller why. Plain text only, no markdown tables.
 Only use product_ids, segment keys, offer ids and rule names that appear in the context."""

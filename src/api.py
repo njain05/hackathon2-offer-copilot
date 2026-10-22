@@ -49,6 +49,13 @@ def draft_to_offer(d: dict, rules: dict) -> tuple[dict, dict | None]:
     return recommender.group_offer(DATA, SEGS, rules, d.get("filters"), pids, disc, days, title, message, d.get("rationale") or "", "dashboard")
 
 
+def audience_with_people(b: dict) -> dict:
+    sel = audience.select(DATA, SEGS, load_rules(), b.get("filters"))
+    if b.get("with_people"):
+        sel["people"] = audience.people(DATA, SEGS, sel["customer_ids"], sel["filters"]["rank_by"], 100)
+    return sel
+
+
 def check(d: dict) -> dict:
     """Dry run: what the rules would say, without storing anything."""
     r = load_rules()
@@ -142,7 +149,7 @@ rationale: one sentence for the seller."""
     out = agent._call(prompt, ASK_SCHEMA)
     if not out:
         raise ApiError(HTTPStatus.BAD_GATEWAY, "The AI couldn't draft that. Try rephrasing, or fill the form by hand.")
-    f = {k: out.pop(k) for k in ("segments", "cities", "categories", "first_time_only", "with_cart")}
+    f = {k: out.pop(k) for k in ("segments", "cities", "categories", "first_time_only", "with_cart", "rank_by", "limit")}
     f["segments"] = [s for s in f["segments"] if s in audience.SEGMENT_LABELS]
     f["cities"] = [c for c in f["cities"] if c in opts["cities"]]
     f["categories"] = [c for c in f["categories"] if c in opts["categories"]]
@@ -217,6 +224,17 @@ def _pipeline_result(cand: dict) -> dict:
     return {"text": f"Drafted and within the rules.{who} Approve it to send it out.", "offers": [o]}
 
 
+def offer_customers(oid: str) -> dict:
+    o = store.get_offer(oid)
+    if o is None:
+        raise ApiError(HTTPStatus.NOT_FOUND, "Offer not found")
+    if not o.get("customer_ids"):
+        who = "everyone (a public deal)" if o["target"] == "ALL" else o.get("target", "")
+        return {"text": f"“{o['title']}” isn't for a fixed list of customers: it's for {who}."}
+    rows = audience.people(DATA, SEGS, o["customer_ids"], "spend", 100)
+    return {"text": f"“{o['title']}” reaches these {len(o['customer_ids'])} customers (highest spend first):", "customers": rows}
+
+
 def chat_turn(body: dict) -> dict:
     """One message in the dashboard chat: Claude answers or picks an action; we carry it out with the same rule-checked code."""
     text = str(body.get("text", "")).strip()[:600]
@@ -255,7 +273,7 @@ def chat_turn(body: dict) -> dict:
                                   a.get("rationale", "Asked for in the dashboard chat."), "Seller-requested offer", source="dashboard")
         return _pipeline_result(cand)
     if tool == "draft_group_offer":
-        f = {k: a.get(k) for k in ("segments", "cities", "categories", "first_time_only", "with_cart")}
+        f = {k: a.get(k) for k in ("segments", "cities", "categories", "first_time_only", "with_cart", "rank_by", "limit")}
         o, sel = recommender.group_offer(DATA, SEGS, load_rules(), f, a.get("product_ids"), a.get("discount_pct", 0), a.get("valid_days", 7),
                                          a.get("title", ""), a.get("message", ""), a.get("rationale", ""), "dashboard")
         if not sel["count"]:
@@ -266,6 +284,15 @@ def chat_turn(body: dict) -> dict:
                 return {"text": f"{sel['matched']} customer(s) match {sel['label']}, but the rules protect all of them: {'; '.join(why)}."}
             return {"text": f"No customers match {sel['label']}. Try a wider group or another city."}
         return _pipeline_result(o)
+    if tool == "list_customers":
+        f = {k: a.get(k) for k in ("segments", "cities", "categories", "first_time_only", "with_cart", "rank_by", "limit")}
+        res = audience.find(DATA, SEGS, f, limit=min(int(f.get("limit") or 20), 50))
+        if not res["customers"]:
+            return {"text": f"No customers match {res['label']}."}
+        shown = len(res["customers"])
+        return {"text": f"{res['label']}: {res['total']} customer(s). Showing the top {shown} {res['rank_by']}.", "customers": res["customers"]}
+    if tool == "offer_customers":
+        return offer_customers(a.get("offer_id", ""))
     if tool == "run_campaigns":
         r = load_rules()
         ai = recommender.ai_campaigns(DATA, SEGS, r) if agent.available() else None
@@ -304,7 +331,7 @@ GET_ROUTES = {
     "/api/customer": lambda q: find_customer(q.get("q", [""])[0]),
 }
 POST_ROUTES = [
-    (r"^/api/audience$", lambda b, m: audience.select(DATA, SEGS, load_rules(), b.get("filters"))),
+    (r"^/api/audience$", lambda b, m: audience_with_people(b)),
     (r"^/api/check$", lambda b, m: check(b)),
     (r"^/api/offers$", lambda b, m: create(b)),
     (r"^/api/offers/(OF-\d+)/(approve|reject|end)$", lambda b, m: decide(m.group(1), m.group(2))),
@@ -355,7 +382,10 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         url = urlparse(self.path)
-        if url.path in GET_ROUTES:
+        m = re.match(r"^/api/offers/(OF-\d+)/customers$", url.path)
+        if m:
+            self._run(lambda: offer_customers(m.group(1)))
+        elif url.path in GET_ROUTES:
             self._run(lambda: GET_ROUTES[url.path](parse_qs(url.query)))
         elif url.path.startswith("/api/"):
             self._json(HTTPStatus.NOT_FOUND, {"error": "Unknown endpoint"})
