@@ -18,9 +18,26 @@ def _load() -> dict:
     return {"offers": [], "shoppers": {}, "seller_chat_id": None}
 
 
+_listeners: list = []
+
+
+def on_change(fn) -> None:
+    """Call fn() after every write (the bot uses it to rebuild the dashboard)."""
+    _listeners.append(fn)
+
+
+def _changed() -> None:
+    for fn in _listeners:
+        try:
+            fn()
+        except Exception:  # a dashboard problem must never break offers
+            pass
+
+
 def _save(s: dict) -> None:
     STATE.parent.mkdir(exist_ok=True)
     STATE.write_text(json.dumps(s, indent=2, ensure_ascii=False), encoding="utf-8")
+    _changed()
 
 
 def add_offer(offer: dict) -> str:
@@ -86,6 +103,7 @@ def log_event(kind: str, payload: dict) -> None:
     AUDIT.parent.mkdir(exist_ok=True)
     with open(AUDIT, "a", encoding="utf-8") as f:
         f.write(json.dumps({"at": datetime.now().isoformat(timespec="seconds"), "kind": kind, **payload}, ensure_ascii=False) + "\n")
+    _changed()
 
 
 def read_audit(n: int = 5) -> list[dict]:

@@ -9,3 +9,4 @@ data/audit.jsonl
 web/offers.json
 data/demo_state.json
 data/demo_audit.jsonl
+web/dashboard.json

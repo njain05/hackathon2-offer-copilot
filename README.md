@@ -38,3 +38,9 @@ Allow re-checks the offer against the current `rules.yaml`, publishes it to `web
 python -m http.server -d web 8000
 ```
 Open http://localhost:8000/offers.html. Before anything is approved, open http://localhost:8000/offers.html?sample to see it with example offers (`web/offers.sample.json`).
+
+## Dashboard (for the sales and marketing team)
+
+`web/dashboard.html` is Offer Copilot's analytics view: revenue and orders, customers going quiet and the spend at stake, open carts, the festival effect (Navratri, Rakhi, Diwali countdown), customer groups and what the engine does for each, category stock cover and discount limits, every offer and its status, the guardrail log, and the rules in force.
+
+The bot rebuilds `web/dashboard.json` whenever an offer or rule changes; `python -m src.dashboard` builds it by hand. Open http://localhost:8000/dashboard.html with the same `python -m http.server -d web 8000`.

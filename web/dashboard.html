@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offer Copilot · Dashboard</title>
+<meta name="description" content="Offer Copilot: customer analytics and offer decisions for Nishtha's Pantry.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hind:wght@400;500;600&family=Rozha+One&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --date: #2B1A12; --date-2: #3D271B; --date-3: #57402F;
+    --almond: #F3E3CC; --almond-2: #E7D2B3; --almond-3: #D8C0A0;
+    --kesar: #F2A41C; --series: #B5651D;       /* chart ink: passes 3:1 on almond */
+    --live: #4F6B22; --blocked: #A3271F; --pending: #8A5A00; --muted: #7A5E4B; --ink: #2B1A12;
+    --display: "Rozha One", Georgia, serif; --body: "Hind", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--date); color: var(--almond); font: 400 16px/1.5 var(--body); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 16px 56px; }
+  a { color: var(--kesar); }
+
+  header.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; margin-bottom: 22px; }
+  .product { font: 400 30px/1 var(--display); margin: 0; }
+  .for { color: var(--almond-2); margin: 0; }
+  nav { margin-left: auto; display: flex; gap: 16px; font-weight: 600; font-size: 15px; }
+  nav a { text-decoration: none; } nav a[aria-current] { color: var(--almond); border-bottom: 2px solid var(--kesar); }
+  .asof { width: 100%; margin: 0; color: var(--almond-3); font-size: 14px; }
+
+  .hero { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 18px; margin-bottom: 18px; }
+  .hero-main { padding: 24px; border-radius: 14px; background: var(--date-2); }
+  .hero-main .label { margin: 0 0 6px; color: var(--almond-2); }
+  .hero-main .big { font: 600 clamp(44px, 7vw, 64px)/1 var(--body); margin: 0 0 8px; color: var(--kesar); }
+  .hero-main p { margin: 0; color: var(--almond-2); max-width: 52ch; }
+  .diwali { padding: 24px; border-radius: 14px; border: 2px dashed var(--date-3); }
+  .diwali h2 { font: 400 26px/1.1 var(--display); margin: 0 0 8px; }
+  .diwali p { margin: 0 0 6px; color: var(--almond-2); }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .tile { background: var(--almond); color: var(--ink); border-radius: 12px; padding: 14px 16px; }
+  .tile .label { margin: 0; font-size: 14px; color: var(--muted); }
+  .tile .value { margin: 2px 0 0; font: 600 28px/1.15 var(--body); }
+  .tile .note { margin: 2px 0 0; font-size: 13.5px; color: var(--muted); }
+  .down { color: var(--blocked); } .up { color: var(--live); }
+
+  .grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 18px; }
+  .card { background: var(--almond); color: var(--ink); border-radius: 14px; padding: 18px 18px 14px; min-width: 0; }
+  .span-8 { grid-column: span 8; } .span-4 { grid-column: span 4; } .span-6 { grid-column: span 6; } .span-12 { grid-column: span 12; }
+  .card h2 { font: 400 22px/1.15 var(--display); margin: 0 0 2px; }
+  .card .sub { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+  details.table-view { margin-top: 8px; font-size: 14px; color: var(--muted); }
+  details.table-view summary { cursor: pointer; }
+
+  svg text { font: 12px var(--body); fill: var(--muted); }
+  .chart { position: relative; }
+  .tip { position: fixed; pointer-events: none; background: var(--date); color: var(--almond); border-radius: 8px;
+         padding: 7px 10px; font-size: 13px; line-height: 1.35; z-index: 10; opacity: 0; transition: opacity .1s; max-width: 260px; }
+  .tip strong { font-size: 15px; } .tip .k { display: inline-block; width: 12px; height: 2px; background: var(--series); vertical-align: middle; margin-right: 6px; }
+
+  .bars { display: grid; gap: 8px; }
+  .bar-row { display: grid; grid-template-columns: minmax(110px, 190px) 1fr; gap: 10px; align-items: center; }
+  .bar-name { font-size: 14.5px; line-height: 1.2; }
+  .bar-name small { display: block; color: var(--muted); font-size: 12.5px; }
+  .bar-track { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+  .bar { height: 14px; background: var(--series); border-radius: 0 4px 4px 0; min-width: 2px; }
+  .bar-row:hover .bar, .bar-row:focus-within .bar { filter: brightness(1.15); }
+  .bar-val { font-size: 14px; font-weight: 600; white-space: nowrap; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  th { text-align: left; font-weight: 600; color: var(--muted); font-size: 13px; padding: 6px 8px; border-bottom: 1px solid var(--almond-3); }
+  td { padding: 8px; border-bottom: 1px solid var(--almond-2); vertical-align: top; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .scroll { overflow-x: auto; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+  .chip.live { color: var(--live); } .chip.pending { color: var(--pending); } .chip.blocked { color: var(--blocked); }
+  .chip.rejected, .chip.ended, .chip.expired { color: var(--muted); }
+  .flag { font-size: 13px; font-weight: 600; white-space: nowrap; }
+  .flag.low { color: var(--blocked); } .flag.slow { color: var(--pending); }
+
+  .log { list-style: none; margin: 0; padding: 0; }
+  .log li { padding: 9px 0; border-bottom: 1px solid var(--almond-2); font-size: 14.5px; }
+  .log .meta { color: var(--muted); font-size: 13px; }
+  .rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 4px 18px; font-size: 14.5px; }
+  .rules div { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--almond-2); }
+  .rules b { font-variant-numeric: tabular-nums; }
+  .empty { color: var(--muted); font-size: 14.5px; margin: 6px 0; }
+  .state { border: 2px dashed var(--date-3); border-radius: 14px; padding: 28px; }
+  footer { margin-top: 28px; color: var(--almond-3); font-size: 13.5px; }
+  :focus-visible { outline: 3px solid var(--kesar); outline-offset: 2px; }
+
+  @media (max-width: 900px) { .span-8, .span-4, .span-6 { grid-column: span 12; } .hero { grid-template-columns: 1fr; } nav { margin-left: 0; width: 100%; } }
+  @media (prefers-reduced-motion: reduce) { .tip { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <p class="product">Offer Copilot</p>
+    <p class="for">for Nishtha's Pantry</p>
+    <nav><a href="dashboard.html" aria-current="page">Dashboard</a><a href="offers.html">Store offers page</a></nav>
+    <p class="asof" id="asof"></p>
+  </header>
+  <main id="app"></main>
+  <footer>Customer data is a synthetic export of the store. Every offer here passed the rules in rules.yaml; change them from the seller bot (“raise the Makhana limit to 18%”).</footer>
+</div>
+<div class="tip" id="tip" role="status" aria-live="polite"></div>
+
+<script>
+const $ = (sel, el = document) => el.querySelector(sel);
+const inr = n => "₹" + Math.round(n).toLocaleString("en-IN");
+const compactInr = n => n >= 1e5 ? "₹" + (n / 1e5).toFixed(n >= 1e6 ? 0 : 1) + "L" : n >= 1e3 ? "₹" + Math.round(n / 1e3) + "K" : inr(n);
+const fmtDate = s => new Date(s + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) k === "class" ? (e.className = v) : e.setAttribute(k, v);
+  for (const k of kids) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+}
+const NS = "http://www.w3.org/2000/svg";
+function svgEl(tag, attrs = {}) { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); return e; }
+
+// ---- shared tooltip (values lead, labels follow; built with textContent) ----
+const tip = $("#tip");
+function showTip(x, y, value, label) {
+  tip.replaceChildren(el("strong", {}, value), el("br"), el("span", {}, label));
+  const w = tip.offsetWidth || 180;
+  tip.style.left = Math.min(x + 14, innerWidth - w - 8) + "px";
+  tip.style.top = (y + 14) + "px";
+  tip.style.opacity = 1;
+}
+const hideTip = () => (tip.style.opacity = 0);
+
+// ---- line chart: one series, festival bands, crosshair ----
+function lineChart(host, points, { festivals = [], fmt = inr, label = "", height = 220 }) {
+  const W = 720, H = height, m = { l: 52, r: 16, t: 14, b: 26 };
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", role: "img", "aria-label": label });
+  const xs = i => m.l + (i / (points.length - 1)) * (W - m.l - m.r);
+  const max = Math.max(...points.map(p => p.y)) * 1.12 || 1;
+  const step = niceStep(max / 4);
+  const top = Math.ceil(max / step) * step;
+  const ys = v => H - m.b - (v / top) * (H - m.t - m.b);
+  // festival bands (annotation, not a series)
+  for (const f of festivals) {
+    const idx = points.map((p, i) => [p, i]).filter(([p]) => p.end >= f.start && p.start <= f.end).map(([, i]) => i);
+    if (!idx.length) continue;
+    const x0 = xs(idx[0]) - 6, x1 = xs(idx[idx.length - 1]) + 6;
+    svg.append(svgEl("rect", { x: x0, y: m.t, width: x1 - x0, height: H - m.t - m.b, fill: "#2B1A12", opacity: 0.07, rx: 4 }));
+    const nearEnd = x1 > W - m.r - 30;
+    const t = svgEl("text", { x: nearEnd ? x1 : (x0 + x1) / 2, y: m.t + 12, "text-anchor": nearEnd ? "end" : "middle" }); t.textContent = f.name; svg.append(t);
+  }
+  for (let v = 0; v <= top; v += step) {
+    svg.append(svgEl("line", { x1: m.l, x2: W - m.r, y1: ys(v), y2: ys(v), stroke: "#D8C0A0", "stroke-width": 1 }));
+    const t = svgEl("text", { x: m.l - 8, y: ys(v) + 4, "text-anchor": "end" }); t.textContent = fmt === inr ? compactInr(v) : v; svg.append(t);
+  }
+  let lastMonth = "", lastX = -1e9;
+  points.forEach((p, i) => {
+    const mo = new Date(p.start + "T00:00:00").toLocaleDateString("en-IN", { month: "short" });
+    if (mo !== lastMonth && xs(i) - lastX >= 44) { const t = svgEl("text", { x: xs(i), y: H - 6, "text-anchor": "middle" }); t.textContent = mo; svg.append(t); lastX = xs(i); }
+    lastMonth = mo;
+  });
+  const d = points.map((p, i) => `${i ? "L" : "M"}${xs(i).toFixed(1)},${ys(p.y).toFixed(1)}`).join("");
+  svg.append(svgEl("path", { d: `${d}L${xs(points.length - 1)},${ys(0)}L${xs(0)},${ys(0)}Z`, fill: "#B5651D", opacity: 0.1 }));
+  svg.append(svgEl("path", { d, fill: "none", stroke: "#B5651D", "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+  // end marker + label (the one direct label)
+  const li = points.length - 1, lp = points[li];
+  svg.append(svgEl("circle", { cx: xs(li), cy: ys(lp.y), r: 4.5, fill: "#B5651D", stroke: "#F3E3CC", "stroke-width": 2 }));
+  // crosshair
+  const cross = svgEl("line", { y1: m.t, y2: H - m.b, stroke: "#7A5E4B", "stroke-width": 1, opacity: 0 });
+  const dot = svgEl("circle", { r: 4.5, fill: "#B5651D", stroke: "#F3E3CC", "stroke-width": 2, opacity: 0 });
+  svg.append(cross, dot);
+  const hit = svgEl("rect", { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: "transparent", tabindex: 0 });
+  const pick = i => {
+    i = Math.max(0, Math.min(points.length - 1, i));
+    cross.setAttribute("x1", xs(i)); cross.setAttribute("x2", xs(i)); cross.setAttribute("opacity", 1);
+    dot.setAttribute("cx", xs(i)); dot.setAttribute("cy", ys(points[i].y)); dot.setAttribute("opacity", 1);
+    return i;
+  };
+  let cur = li;
+  hit.addEventListener("pointermove", e => {
+    const r = svg.getBoundingClientRect();
+    const x = (e.clientX - r.left) * (W / r.width);
+    cur = pick(Math.round(((x - m.l) / (W - m.l - m.r)) * (points.length - 1)));
+    showTip(e.clientX, e.clientY, fmt(points[cur].y), points[cur].label);
+  });
+  hit.addEventListener("pointerleave", () => { hideTip(); cross.setAttribute("opacity", 0); dot.setAttribute("opacity", 0); });
+  hit.addEventListener("keydown", e => {
+    if (!["ArrowLeft", "ArrowRight"].includes(e.key)) return;
+    cur = pick(cur + (e.key === "ArrowRight" ? 1 : -1));
+    const r = svg.getBoundingClientRect();
+    showTip(r.left + xs(cur) * r.width / W, r.top + 10, fmt(points[cur].y), points[cur].label);
+  });
+  hit.addEventListener("blur", hideTip);
+  svg.append(hit);
+  host.append(svg);
+}
+function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw || 1)); return [1, 2, 2.5, 5, 10].map(k => k * p).find(s => s >= raw); }
+
+function tableView(headers, rows) {
+  const t = el("table");
+  t.append(el("thead", {}, el("tr", {}, ...headers.map((h, i) => el("th", i ? { class: "num" } : {}, h)))));
+  t.append(el("tbody", {}, ...rows.map(r => el("tr", {}, ...r.map((c, i) => el("td", i ? { class: "num" } : {}, c))))));
+  return el("details", { class: "table-view" }, el("summary", {}, "Show as table"), el("div", { class: "scroll" }, t));
+}
+
+function card(span, title, sub) {
+  const c = el("section", { class: `card span-${span}` }, el("h2", {}, title));
+  if (sub) c.append(el("p", { class: "sub" }, sub));
+  return c;
+}
+
+// ---- sections ----
+function render(d) {
+  const k = d.kpis, app = $("#app");
+  $("#asof").textContent = `Data as of ${fmtDate(d.today)} 2026 · updated ${new Date(d.generated_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
+  const frag = document.createDocumentFragment();
+
+  // hero: the one number that matters this week
+  const gift = d.categories.find(c => c.category === "Gift Box");
+  frag.append(el("div", { class: "hero" },
+    el("div", { class: "hero-main" },
+      el("p", { class: "label" }, "Monthly spend at risk"),
+      el("p", { class: "big" }, inr(k.quiet_monthly_spend)),
+      el("p", {}, `${k.quiet_customers} customers have gone quiet for 30+ days. Win-back offers target them; top customers who buy anyway get no discount.`)),
+    el("div", { class: "diwali" },
+      el("h2", {}, `Diwali in ${d.days_to_diwali} days`),
+      el("p", {}, "Gifting demand ramps from now: nuts, dried fruit and gift boxes."),
+      gift ? el("p", {}, `Gift boxes: ${gift.stock} in stock, about ${gift.weeks_of_stock} weeks at the current pace.`) : "")));
+
+  const delta = k.revenue_delta_pct;
+  const tiles = [
+    ["Revenue, last 30 days", compactInr(k.revenue_30), delta == null ? "" : `${delta > 0 ? "▲ +" : "▼ "}${delta}% vs previous 30 days`, delta < 0 ? "down" : "up"],
+    ["Orders, last 30 days", k.orders_30.toLocaleString("en-IN"), `average basket ${inr(k.aov_30)}`],
+    ["Active customers", `${k.active_30} of ${k.customers}`, "ordered in the last 30 days"],
+    ["Open carts", k.carts_open, `${inr(k.cart_value)} waiting at checkout`],
+    ["Offers live", k.offers_live, `${k.offers_pending} waiting for approval`],
+    ["Guardrail saves", k.guardrail_saves, "offers the rules lowered or blocked"],
+  ];
+  frag.append(el("div", { class: "tiles" }, ...tiles.map(([l, v, n, cls]) =>
+    el("div", { class: "tile" }, el("p", { class: "label" }, l), el("p", { class: "value" }, v), el("p", { class: `note ${cls || ""}` }, n)))));
+
+  const grid = el("div", { class: "grid" });
+
+  // weekly revenue
+  const weekly = d.weekly.map(w => {
+    const end = new Date(new Date(w.week + "T00:00:00").getTime() + 6 * 864e5).toISOString().slice(0, 10);
+    return { y: w.revenue, start: w.week, end, label: `Week of ${fmtDate(w.week)} · ${w.orders} orders` };
+  });
+  const rev = card(8, "Revenue per week", "Last 25 complete weeks (data starts 25 Apr). Shaded: festival weeks.");
+  const rh = el("div", { class: "chart" }); rev.append(rh);
+  lineChart(rh, weekly, { festivals: d.festivals, label: "Weekly revenue line chart" });
+  rev.append(tableView(["Week", "Revenue", "Orders"], d.weekly.map(w => [fmtDate(w.week), inr(w.revenue), w.orders])));
+  grid.append(rev);
+
+  // festival effect (small multiples, one series each)
+  const fest = card(4, "Festival effect", "Units sold per week");
+  for (const [key, name] of [["navratri", "Fasting & Navratri items"], ["gifting", "Gifting items"]]) {
+    const pts = d.festival_units[key].map((y, i) => ({ ...weekly[i], y, label: `${weekly[i].label.split(" · ")[0]} · ${name}` }));
+    const peak = pts.reduce((a, b) => (b.y > a.y ? b : a));
+    fest.append(el("p", { class: "sub", style: "margin:6px 0 0" }, `${name} · peak ${peak.y} units, week of ${fmtDate(peak.start)}`));
+    const h = el("div", { class: "chart" }); fest.append(h);
+    lineChart(h, pts, { festivals: d.festivals, fmt: v => `${v} units`, label: `${name} weekly units`, height: 150 });
+  }
+  grid.append(fest);
+
+  // segments
+  const seg = card(6, "Customer groups", "Worked out from each customer's behaviour, and what the engine does for them");
+  const maxC = Math.max(...d.segments.map(s => s.customers));
+  const bars = el("div", { class: "bars" });
+  for (const s of d.segments) {
+    const row = el("div", { class: "bar-row", tabindex: 0 },
+      el("div", { class: "bar-name" }, s.name, el("small", {}, s.action)),
+      el("div", { class: "bar-track" }, el("div", { class: "bar", style: `width:${(s.customers / maxC) * 70}%` }), el("span", { class: "bar-val" }, `${s.customers} · ${s.share_pct}%`)));
+    const info = `${s.name} · avg spend ${inr(s.avg_spend)}` + (s.avg_days_since_order != null ? ` · last order ~${s.avg_days_since_order} days ago` : "");
+    row.addEventListener("pointermove", e => showTip(e.clientX, e.clientY, `${s.customers} customers`, info));
+    row.addEventListener("pointerleave", hideTip);
+    row.addEventListener("focus", () => { const r = row.getBoundingClientRect(); showTip(r.left + 40, r.bottom - 6, `${s.customers} customers`, info); });
+    row.addEventListener("blur", hideTip);
+    bars.append(row);
+  }
+  seg.append(bars, tableView(["Group", "Customers", "Avg spend", "Days since order"],
+    d.segments.map(s => [s.name, s.customers, inr(s.avg_spend), s.avg_days_since_order ?? "—"])));
+  grid.append(seg);
+
+  // categories
+  const cat = card(6, "Categories, last 30 days", "Revenue, stock cover and the discount limit from rules.yaml");
+  const ct = el("table");
+  ct.append(el("thead", {}, el("tr", {}, ...["Category", "Revenue", "Stock cover", "Margin", "Max off"].map((h, i) => el("th", i ? { class: "num" } : {}, h)))));
+  const tb = el("tbody");
+  for (const c of d.categories) {
+    const cover = c.weeks_of_stock == null ? "—" : `${c.weeks_of_stock} wk`;
+    const flag = c.weeks_of_stock != null && c.weeks_of_stock < 4 ? el("span", { class: "flag low" }, " ⚠ low")
+               : c.weeks_of_stock != null && c.weeks_of_stock > 12 ? el("span", { class: "flag slow" }, " ◷ slow") : "";
+    tb.append(el("tr", {}, el("td", {}, c.category), el("td", { class: "num" }, inr(c.revenue_30)),
+      el("td", { class: "num" }, cover, flag), el("td", { class: "num" }, `${c.avg_margin_pct}%`), el("td", { class: "num" }, `${c.discount_cap_pct}%`)));
+  }
+  ct.append(tb);
+  cat.append(el("div", { class: "scroll" }, ct),
+    el("p", { class: "sub", style: "margin:8px 0 0" }, "⚠ low: under 4 weeks of stock. ◷ slow: over 12 weeks, a candidate for a clearance offer."));
+  grid.append(cat);
+
+  // offers
+  const off = card(8, "Offers", "Every offer the system proposed, newest first");
+  const ICON = { live: "✅ Live", pending: "⏳ Waiting", blocked: "🛡 Blocked", rejected: "✖ Rejected", ended: "⏹ Ended", expired: "⌛ Expired" };
+  if (!d.offers.length) off.append(el("p", { class: "empty" }, "No offers yet. Send /campaigns or ask the seller bot for one."));
+  else {
+    const t = el("table");
+    t.append(el("thead", {}, el("tr", {}, ...["Offer", "For", "Off", "Status", "From"].map((h, i) => el("th", i === 2 ? { class: "num" } : {}, h)))));
+    t.append(el("tbody", {}, ...d.offers.map(o => el("tr", {},
+      el("td", {}, o.title, o.status === "blocked" && o.reason ? el("div", { class: "sub", style: "margin:2px 0 0" }, o.reason) : "",
+                       o.used ? el("div", { class: "sub", style: "margin:2px 0 0" }, "🛒 used by the customer") : ""),
+      el("td", {}, o.audience), el("td", { class: "num" }, `${o.discount_pct}%`),
+      el("td", {}, el("span", { class: `chip ${o.status}` }, ICON[o.status] || o.status)),
+      el("td", {}, o.source)))));
+    off.append(el("div", { class: "scroll" }, t));
+  }
+  grid.append(off);
+
+  // guardrail log
+  const g = card(4, "Guardrail log", "What the rules changed or stopped");
+  if (!d.audit.length) g.append(el("p", { class: "empty" }, "Nothing yet: every offer so far was within the rules."));
+  else g.append(el("ul", { class: "log" }, ...d.audit.map(e => el("li", {},
+    e.kind === "rule_change" ? `📝 ${e.what}` : e.kind === "adjusted" ? `⚖️ ${e.what}: ${e.proposed}% → ${e.final}%` : `🛡 ${e.what}: blocked`,
+    el("div", { class: "meta" }, [e.source, e.reason].filter(Boolean).join(" · "))))));
+  grid.append(g);
+
+  // rules
+  const r = d.rules, rc = card(12, "Rules in force", "From rules.yaml. Change them by asking the seller bot; it shows the change and waits for Confirm.");
+  const items = [
+    ["Highest discount on any offer", `${r.global.max_discount_pct}%`],
+    ["Lowest margin after discount", `${r.global.min_margin_pct_after_discount}%`],
+    ["Days between offers to one customer", r.global.cooldown_days_per_customer],
+    ["Offers per customer per month", r.global.max_offers_per_customer_per_month],
+    ["Minimum stock to promote", `${r.global.min_stock_for_offer} units`],
+    ["Respect marketing opt-out", r.global.respect_marketing_opt_in ? "Yes" : "No"],
+    ...Object.entries(r.category_caps_pct || {}).map(([c, v]) => [`${c}: max discount`, `${v}%`]),
+    ...(r.first_order ? [["Welcome offer (first order)", `${r.first_order.welcome_discount_pct}%`], ["Welcome offer minimum basket", inr(r.first_order.min_order_value)]] : []),
+  ];
+  rc.append(el("div", { class: "rules" }, ...items.map(([a, b]) => el("div", {}, el("span", {}, a), el("b", {}, b)))));
+  grid.append(rc);
+
+  frag.append(grid);
+  app.replaceChildren(frag);
+}
+
+async function load() {
+  try {
+    const res = await fetch("dashboard.json", { cache: "no-store" });
+    if (!res.ok) throw new Error(res.status);
+    render(await res.json());
+  } catch {
+    $("#app").replaceChildren(el("section", { class: "state" },
+      el("h2", { style: "font:400 26px/1.2 var(--display);margin:0 0 8px" }, "No dashboard data yet"),
+      el("p", { style: "margin:0;color:var(--almond-2)" }, "Run python -m src.dashboard (or start the bot), then open this page through python -m http.server -d web 8000.")));
+  }
+}
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>

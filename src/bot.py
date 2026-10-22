@@ -493,6 +493,9 @@ def main() -> None:
     if not token:
         raise SystemExit("Set TELEGRAM_BOT_TOKEN in .env (copy .env.example to .env).")
     store.export_public_offers()
+    from src import dashboard
+    store.on_change(lambda: dashboard.export(DATA, SEGS))  # dashboard.json follows every offer change
+    dashboard.export(DATA, SEGS)
     ai = "on" if agent.available() else "off: rule engine"
     if not seller_token:
         log.info("Offer Copilot running, one bot (AI agent %s). Ctrl+C to stop.", ai)
