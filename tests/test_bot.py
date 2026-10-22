@@ -190,3 +190,29 @@ def test_adjusted_offer_code_matches_final_discount():
     res = recommender.run_pipeline(bot.DATA, load_rules(), [bad])
     o = store.get_offer(res["adjusted"][0])
     assert o["discount_pct"] == 15 and o["code"] == "MEGA15"
+
+
+def test_two_bots_seller_can_also_shop_and_offers_go_via_customer_bot(monkeypatch):
+    customer_bot = SimpleNamespace(send_message=AsyncMock())
+    monkeypatch.setattr(bot, "TWO_BOTS", True)
+    monkeypatch.setattr(bot, "CUSTOMER_BOT", customer_bot)
+    me = 222  # same Telegram user in both bots (private chat id == user id)
+    run(bot.start(msg_update(me), ctx()))         # customer bot
+    seller = msg_update(me)
+    run(bot.seller(seller, ctx("secret")))        # seller bot
+    assert store.get_shopper(me)                  # still a shopper in the customer bot
+    run(bot.campaigns(seller, ctx()))
+    o = next(x for x in store.get_offers("pending") if x["target"] == "ALL")
+    seller_ctx = ctx()
+    run(bot.button(press(me, f"allow:{o['offer_id']}"), seller_ctx))
+    assert customer_bot.send_message.await_count == 1   # delivered by the customer bot...
+    assert seller_ctx.bot.send_message.await_count == 0  # ...not by the seller bot
+
+
+def test_two_bot_apps_split_commands():
+    def commands(app):
+        return {c for h in app.handlers[0] if hasattr(h, "commands") for c in h.commands}
+    cust = commands(bot.build_customer_app("123456:TEST-customer"))
+    sell = commands(bot.build_seller_app("654321:TEST-seller"))
+    assert {"start", "offer", "offers", "profile"} <= cust and "campaigns" not in cust and "seller" not in cust
+    assert {"seller", "campaigns", "pending", "customer"} <= sell and "offer" not in sell

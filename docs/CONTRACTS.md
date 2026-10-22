@@ -96,7 +96,7 @@ propose_offers(data, segments, today, rules) -> list[dict]   # LLM returns JSON 
 ## src/bot.py
 Telegram bot (python-telegram-bot v21). Commands: /start, /offers (generate+send pending cards), /pending, /live, /customer <id or name>, /stats, /help.
 Callback data: `allow:<offer_id>` / `reject:<offer_id>`. Allow => re-validate => set_status approved => export_public_offers.
-Env: TELEGRAM_BOT_TOKEN, SELLER_CHAT_ID (optional; first /start user becomes seller if unset).
+Env: TELEGRAM_BOT_TOKEN (customer bot), SELLER_BOT_TOKEN (optional separate seller bot; both run in one process), SELLER_CODE (/seller <code> unlocks seller mode).
 
 ## src/chat.py
 ```python

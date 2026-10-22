@@ -4,22 +4,22 @@ Seller-side personalised offer engine with a Telegram bot. See CLAUDE.md and doc
 
 ## Run the bot
 
-1. **Create the bot**: in Telegram open **@BotFather** → `/newbot` → pick a name and a username ending in `bot`. Copy the token.
+Two Telegram bots, one program: a **customer bot** (classmates use it; this is the username to share and submit) and a **seller bot** (only you). Both read and write the same `data/state.json`, so an offer you Allow in the seller bot is sent to customers by the customer bot.
+
+1. **Create the bots**: in Telegram open **@BotFather** → `/newbot` twice (e.g. `nishthas_pantry_bot` for customers, `nishthas_pantry_seller_bot` for you). Copy both tokens.
 2. **Setup** (once, from the repo root):
    ```bash
    python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
    cp .env.example .env
    ```
-   Fill `.env`: `TELEGRAM_BOT_TOKEN=<token>`, `SELLER_CODE=<a secret word only you know>`, optionally `ANTHROPIC_API_KEY=` for the AI agent. `.env` is git-ignored — never commit it.
-3. **Start**: `.venv/bin/python -m src.bot` (keep it running; Ctrl+C stops it).
+   Fill `.env`: `TELEGRAM_BOT_TOKEN` (customer bot), `SELLER_BOT_TOKEN` (seller bot), `SELLER_CODE` (a secret word), optionally `ANTHROPIC_API_KEY` for the AI agent. `.env` is git-ignored — never commit it. Leave `SELLER_BOT_TOKEN` empty to run a single bot that does both jobs.
+3. **Start**: `.venv/bin/python -m src.bot` (keep it running; Ctrl+C stops both bots).
 
-**Shoppers (classmates)** — `/start` gives you a synthetic customer · `/profile` your orders, cart, points · `/offer` a personal offer chosen for you · `/offers` live deals.
+**Customer bot** — `/start` gives you a synthetic customer · `/profile` your orders, cart, points · `/offer` a personal offer chosen for you · `/offers` live deals.
 
-**Seller (you)** — `/seller <SELLER_CODE>` once, then `/campaigns` (proposes offers, each checked by `rules.yaml`, sent as cards with ✅ Allow / ❌ Reject) · `/pending` · `/live` · `/stats` · `/audit` (offers the rules lowered or blocked) · `/customer <name or id>`.
+**Seller bot** — `/seller <SELLER_CODE>` once, then `/campaigns` (proposes offers, each checked by `rules.yaml`, sent as cards with ✅ Allow / ❌ Reject) · `/pending` · `/live` · `/stats` · `/audit` (offers the rules lowered or blocked) · `/customer <name or id>`.
 
-Allow re-checks the offer against the current `rules.yaml`, publishes it to `web/offers.json` and sends it to every classmate whose shopper it targets.
-
-Note: `python demo.py` resets `data/state.json` (offers, shopper assignments, seller) — don't run it while the bot is live.
+Allow re-checks the offer against the current `rules.yaml`, publishes it to `web/offers.json` and sends it, through the customer bot, to every customer it targets. You can use both bots from your own Telegram account to see both sides.
 
 ## Offers page
 

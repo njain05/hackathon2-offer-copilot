@@ -1,5 +1,7 @@
-"""Telegram bot. Customer mode (default): /start /profile /offer /offers /help.  Seller mode: /seller /campaigns /pending /live /stats /audit /customer.
+"""Telegram bots. Customer bot: /start /profile /offer /offers /help.  Seller bot: /seller /campaigns /pending /live /stats /audit /customer.
 
+Two-bot mode (SELLER_BOT_TOKEN set): customers use the TELEGRAM_BOT_TOKEN bot, the seller uses the SELLER_BOT_TOKEN bot;
+both run in one process and share data/state.json. Without SELLER_BOT_TOKEN one bot does both jobs.
 Run from repo root:  .venv/bin/python -m src.bot
 Every offer shown or published here has passed rules.validate_offer (recommender does it; Allow re-checks).
 """
@@ -25,6 +27,8 @@ logging.getLogger("httpx").setLevel(logging.WARNING)  # httpx logs request URLs,
 log = logging.getLogger("offer_copilot")
 
 HTML = ParseMode.HTML
+TWO_BOTS = False      # set in main(): separate seller bot
+CUSTOMER_BOT = None   # the bot that messages shoppers (used when the seller bot approves an offer)
 DATA = load_all()
 SEGS = segment_customers(DATA)
 
@@ -71,7 +75,7 @@ def audience_chats(offer: dict) -> list[int]:
     opted = DATA["customers"].set_index("customer_id").marketing_opt_in
     out = []
     for chat_id, cid in shoppers.items():
-        if int(chat_id) == seller or not bool(opted.get(cid, False)):
+        if (int(chat_id) == seller and not TWO_BOTS) or not bool(opted.get(cid, False)):
             continue
         if offer["target"] in ("ALL", cid) or seg.get(cid) == offer["target"]:
             out.append(int(chat_id))
@@ -109,7 +113,7 @@ def is_seller(update: Update) -> bool:
 # ---------- customer mode ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
-    if is_seller(update):
+    if is_seller(update) and not TWO_BOTS:
         await update.message.reply_text("🧑‍💼 This chat is the seller. Shopper features are for your customers. Send /help for seller commands.")
         return
     cid = store.get_shopper(chat_id)
@@ -166,15 +170,25 @@ async def offers(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(messages.customer_message(o, DATA), parse_mode=HTML)
 
 
+SHOPPER_HELP = ("<b>Shopper commands</b>\n/start · your synthetic shopper\n/profile · your orders, cart and points\n"
+                "/offer · a personal offer picked for you\n/offers · live deals for everyone\n")
+SELLER_HELP = ("<b>Seller commands</b>\n/campaigns · analyse and propose offers\n/pending · offers waiting for you\n"
+               "/live · offers customers can see\n/stats · results\n/audit · offers the rules changed or blocked\n"
+               "/customer &lt;name or id&gt; · suggest an offer for one customer")
+
+
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    text = ("<b>Shopper commands</b>\n/start · your synthetic shopper\n/profile · your orders, cart and points\n"
-            "/offer · a personal offer picked for you\n/offers · live deals for everyone\n")
-    if is_seller(update):
-        text += ("\n<b>Seller commands</b>\n/campaigns · analyse and propose offers\n/pending · offers waiting for you\n"
-                 "/live · offers customers can see\n/stats · results\n/audit · offers the rules changed or blocked\n"
-                 "/customer &lt;name or id&gt; · suggest an offer for one customer")
-    else:
-        text += "\nSeller? /seller &lt;code&gt;"
+    """Single-bot mode: shopper help, plus seller help for the seller."""
+    text = SHOPPER_HELP + ("\n" + SELLER_HELP if is_seller(update) else "\nSeller? /seller &lt;code&gt;")
+    await update.message.reply_text(text, parse_mode=HTML)
+
+
+async def help_shopper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(SHOPPER_HELP, parse_mode=HTML)
+
+
+async def help_seller(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    text = SELLER_HELP if is_seller(update) else "🧑‍💼 Seller console for Nishtha's Pantry. Send /seller &lt;code&gt; to unlock it."
     await update.message.reply_text(text, parse_mode=HTML)
 
 
@@ -193,8 +207,11 @@ async def seller(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Wrong seller code.")
         return
     store.set_seller(chat_id)
-    store.remove_shopper(chat_id)  # the seller is not a customer: no customer offers in this chat
     log.info("Seller chat registered")
+    if TWO_BOTS:
+        await update.message.reply_text("🧑‍💼 Seller mode on.\n" + SELLER_HELP, parse_mode=HTML)
+        return
+    store.remove_shopper(chat_id)  # single bot: the seller's chat is not a customer, so no customer offers here
     await update.message.reply_text(
         "🧑‍💼 Seller mode on. This chat now only gets seller cards, not customer offers.\n"
         "/campaigns · /pending · /live · /stats · /audit · /customer &lt;name or id&gt;\n\n"
@@ -358,9 +375,10 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def _deliver(context: ContextTypes.DEFAULT_TYPE, o: dict) -> int:
     """Push an approved offer to every classmate whose shopper it targets. Returns chats reached."""
     sent = 0
+    bot = CUSTOMER_BOT or context.bot  # two-bot mode: customers only ever hear from the customer bot
     for chat_id in audience_chats(o):
         try:
-            await context.bot.send_message(chat_id, "🎉 New offer for you!\n\n" + messages.customer_message(o, DATA),
+            await bot.send_message(chat_id, "🎉 New offer for you!\n\n" + messages.customer_message(o, DATA),
                                            parse_mode=HTML, reply_markup=customer_keyboard(o["offer_id"]))
             sent += 1
         except Exception as e:  # user blocked the bot, etc.
@@ -372,6 +390,10 @@ async def other(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("I only understand commands. Try /offer, /offers or /profile (or /help).")
 
 
+async def other_seller(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("I only understand commands. Try /campaigns, /pending or /customer &lt;name&gt; (or /help).", parse_mode=HTML)
+
+
 async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     log.error("Handler error: %r", context.error, exc_info=context.error)
     if isinstance(update, Update) and update.effective_message:
@@ -381,26 +403,70 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
             pass
 
 
-def build_app(token: str) -> Application:
+SHOPPER_COMMANDS = [("start", start), ("profile", profile), ("offer", offer), ("offers", offers)]
+SELLER_COMMANDS = [("seller", seller), ("campaigns", campaigns), ("pending", pending), ("live", live),
+                   ("stats", stats), ("audit", audit), ("customer", customer)]
+
+
+def _app(token: str, commands: list, fallback) -> Application:
     app = Application.builder().token(token).build()
-    for name, fn in [("start", start), ("profile", profile), ("offer", offer), ("offers", offers), ("help", help_cmd),
-                     ("seller", seller), ("campaigns", campaigns), ("pending", pending), ("live", live),
-                     ("stats", stats), ("audit", audit), ("customer", customer)]:
+    for name, fn in commands:
         app.add_handler(CommandHandler(name, fn))
     app.add_handler(CallbackQueryHandler(button))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, other))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, fallback))
     app.add_error_handler(on_error)
     return app
 
 
+def build_app(token: str) -> Application:
+    """Single bot doing both jobs."""
+    return _app(token, SHOPPER_COMMANDS + SELLER_COMMANDS + [("help", help_cmd)], other)
+
+
+def build_customer_app(token: str) -> Application:
+    return _app(token, SHOPPER_COMMANDS + [("help", help_shopper)], other)
+
+
+def build_seller_app(token: str) -> Application:
+    return _app(token, SELLER_COMMANDS + [("start", help_seller), ("help", help_seller)], other_seller)
+
+
+async def _run_all(apps: list[Application]) -> None:
+    """Poll several bots in one event loop until Ctrl+C."""
+    for app in apps:
+        await app.initialize()
+        await app.start()
+        await app.updater.start_polling()
+    try:
+        await asyncio.Event().wait()
+    finally:
+        for app in apps:
+            await app.updater.stop()
+            await app.stop()
+            await app.shutdown()
+
+
 def main() -> None:
+    global TWO_BOTS, CUSTOMER_BOT
     load_dotenv(ROOT / ".env")
     token = os.getenv("TELEGRAM_BOT_TOKEN")
+    seller_token = os.getenv("SELLER_BOT_TOKEN")
     if not token:
         raise SystemExit("Set TELEGRAM_BOT_TOKEN in .env (copy .env.example to .env).")
     store.export_public_offers()
-    log.info("Offer Copilot running (AI agent %s). Ctrl+C to stop.", "on" if agent.available() else "off: rule engine")
-    build_app(token).run_polling()
+    ai = "on" if agent.available() else "off: rule engine"
+    if not seller_token:
+        log.info("Offer Copilot running, one bot (AI agent %s). Ctrl+C to stop.", ai)
+        build_app(token).run_polling()
+        return
+    TWO_BOTS = True
+    customer_app, seller_app = build_customer_app(token), build_seller_app(seller_token)
+    CUSTOMER_BOT = customer_app.bot
+    log.info("Offer Copilot running, customer bot + seller bot (AI agent %s). Ctrl+C to stop.", ai)
+    try:
+        asyncio.run(_run_all([customer_app, seller_app]))
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == "__main__":
