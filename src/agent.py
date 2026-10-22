@@ -61,6 +61,7 @@ def personalise(profile: dict, candidate: dict, rules: dict) -> dict | None:
 RULE-BASED STARTING POINT (you may improve it):\n{json.dumps(candidate, default=str, ensure_ascii=False)}
 BUSINESS LIMITS (you will be checked against these):\n{json.dumps(rules, ensure_ascii=False)}
 Decide this customer's offer. discount_pct may be 0 if this customer needs no discount.
+Keep the starting point's products: the message may only mention products listed in product_names (do not invent others).
 title: max 8 words. message: customer-facing, max 35 words, warm, uses ₹ if needed.
 rationale: 1-2 sentences for the seller on why this offer suits this customer."""
     return _call(prompt, PERSONAL_SCHEMA)

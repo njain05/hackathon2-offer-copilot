@@ -19,3 +19,9 @@ category_caps_pct:
   Seeds: 20
   Snacks: 20
   Mixes: 20
+
+# FIRST ORDER (brand-new customers who have never ordered)
+first_order:
+  welcome_discount_pct: 10              # welcome offer on the very first order; never more than this
+  min_order_value: 499                  # welcome offer only applies to baskets of at least this many rupees
+  # A customer can get only ONE welcome offer, ever, and only before their first order.

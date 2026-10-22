@@ -110,11 +110,34 @@ def customer_profile(data: dict, segs: pd.DataFrame, cid: str) -> dict:
             "cart_items": int(c.cart_items), "marketing_opt_in": bool(c.marketing_opt_in)}
 
 
+def bestsellers(data: dict, rules: dict, n: int = 3) -> list[str]:
+    """Most-ordered products (by units) that have enough stock to promote."""
+    ok = set(_stock_ok(data, rules).product_id)
+    units = data["order_items"].groupby("product_id").quantity.sum().sort_values(ascending=False)
+    return [pid for pid in units.index if pid in ok][:n]
+
+
+def _welcome_candidate(data, rules, prof, cart) -> dict:
+    """First order: small capped welcome discount on their cart (or our bestsellers), minimum basket from rules.yaml."""
+    fo = rules["first_order"]
+    ok = set(_stock_ok(data, rules).product_id)
+    pids = [x for x in cart if x in ok][:3] or bestsellers(data, rules)
+    disc, mov = int(fo["welcome_discount_pct"]), int(fo["min_order_value"])
+    o = _offer("personal", "Welcome to Nishtha's Pantry",
+               f"Your first order deserves a treat: {disc}% off on orders of ₹{mov} or more.", prof["customer_id"], pids, disc, 14,
+               "First-time customer: the first order is the hardest to win, so a small one-time welcome offer with a minimum basket.",
+               "Turn a new sign-up into a first order without giving away margin on tiny baskets",
+               code=f"WELCOME{disc}-{prof['customer_id']}")
+    return {**o, "is_welcome": True, "min_order_value": mov}
+
+
 def _base_candidate(data, rules, prof) -> dict | None:
     """Rule-based starting offer for a customer; None = no discount needed."""
     p = _stock_ok(data, rules)
     seg = prof["segment"]
     cart = [x for x in data["customers"].set_index("customer_id").loc[prof["customer_id"]].cart_product_ids.split(",") if x]
+    if prof["orders_total"] == 0 and rules.get("first_order"):
+        return _welcome_candidate(data, rules, prof, cart)
     if prof["return_rate"] >= 0.3:
         return None
     if cart:
@@ -154,20 +177,22 @@ def offer_for_customer(data: dict, segs: pd.DataFrame, rules: dict, cid: str, us
     used_ai = False
     cand = dict(base)
     if use_ai and agent.available():
-        ai = agent.personalise(prof, base, rules)
+        names = data["products"].set_index("product_id").product_name
+        ai = agent.personalise(prof, {**base, "product_names": [names.get(x, x) for x in base["product_ids"]]}, rules)
         if ai and "discount_pct" in ai:
             used_ai = True
             cand.update(discount_pct=int(ai["discount_pct"]), title=ai.get("title", cand["title"]), message=ai.get("message", cand["message"]),
                         rationale=ai.get("rationale", cand["rationale"]), source="ai_agent")
             if cand["discount_pct"] <= 0:
                 return {"profile": prof, "offer": None, "explanation": cand["rationale"], "notes": [], "used_ai": True}
-            cand["code"] = f"{cid}-{cand['discount_pct']}"
+            cand["code"] = (f"WELCOME{cand['discount_pct']}-{cid}" if cand.get("is_welcome") else f"{cid}-{cand['discount_pct']}")
     v = validate_offer(cand, data, rules, store.history_for(cid))
     notes = []
     if not v.ok and v.adjusted_offer:
         notes.append(f"Proposed {cand['discount_pct']}%, rules lowered it to {v.adjusted_offer['discount_pct']}%.")
         store.log_event("adjusted", {"source": cand["source"], "customer": cid, "proposed": cand["discount_pct"], "final": v.adjusted_offer["discount_pct"], "reasons": v.reasons})
-        cand = v.adjusted_offer; cand["code"] = f"{cid}-{cand['discount_pct']}"
+        cand = v.adjusted_offer
+        cand["code"] = f"WELCOME{cand['discount_pct']}-{cid}" if cand.get("is_welcome") else f"{cid}-{cand['discount_pct']}"
     elif not v.ok:
         store.log_event("blocked", {"source": cand["source"], "customer": cid, "reasons": v.reasons})
         return {"profile": prof, "offer": None, "explanation": "Offer blocked by rules: " + "; ".join(v.reasons), "notes": v.reasons, "used_ai": used_ai}

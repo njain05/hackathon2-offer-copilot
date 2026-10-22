@@ -38,6 +38,27 @@ def _d(s: str) -> date:
     return datetime.strptime(s, "%Y-%m-%d").date()
 
 
+def _check_welcome(offer, d, customers, history, rules, disc_reasons, other) -> None:
+    """First-order welcome offer: new customers only, once ever, capped discount, minimum basket."""
+    fo = rules.get("first_order")
+    if not fo:
+        other.append("Welcome offers are switched off (no first_order section in rules.yaml)")
+        return
+    target = offer.get("target", "")
+    if target not in customers.index:
+        other.append("A welcome offer must be for one customer")
+        return
+    n = int(customers.loc[target, "orders_total"])
+    if n > 0:
+        other.append(f"Welcome offers are only for first orders; this customer has ordered {n} time(s)")
+    if any(h.get("is_welcome") and h.get("target") == target and h.get("status") in ("approved", "sent") for h in history):
+        other.append("Customer already received a welcome offer (one per customer)")
+    if d > fo["welcome_discount_pct"]:
+        disc_reasons.append(f"Welcome offer {d}% is above the welcome limit of {fo['welcome_discount_pct']}%")
+    if int(offer.get("min_order_value") or 0) < fo["min_order_value"]:
+        other.append(f"Welcome offer must require a basket of at least ₹{fo['min_order_value']}")
+
+
 def validate_offer(offer: dict, data: dict, rules: dict, history: list[dict] | None = None) -> ValidationResult:
     history = history or []
     g = rules["global"]
@@ -86,7 +107,12 @@ def validate_offer(offer: dict, data: dict, rules: dict, history: list[dict] | N
         if len(recent) >= g["max_offers_per_customer_per_month"]:
             other.append(f"Customer already received {len(recent)} offers this month (cap {g['max_offers_per_customer_per_month']})")
 
+    if offer.get("is_welcome"):
+        _check_welcome(offer, d, customers, history, rules, disc_reasons, other)
+
     adjusted = None
+    if offer.get("is_welcome") and rules.get("first_order"):
+        caps.append(int(rules["first_order"]["welcome_discount_pct"]))
     if disc_reasons and not other and caps:
         new_d = min(caps)
         if new_d >= 1:

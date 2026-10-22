@@ -39,12 +39,16 @@ def rules() -> dict:
 
 
 # ---------- pure helpers (tested in tests/test_bot.py) ----------
-def pick_shopper(taken: set[str], rng: random.Random = random.Random()) -> str:
-    """A synthetic customer (opted in, not yet given to another classmate) for a new chat."""
+def pick_shopper(taken: set[str], rng: random.Random = random.Random(), first_time: bool | None = None) -> str:
+    """A synthetic customer (opted in, not yet given to another classmate) for a new chat.
+    first_time=True: someone who has never ordered; False: someone with order history; None: anyone."""
     c = DATA["customers"]
-    pool = c[c.marketing_opt_in & ~c.customer_id.isin(taken)]
+    c = c[c.marketing_opt_in]
+    if first_time is not None:
+        c = c[(c.orders_total == 0) == first_time]
+    pool = c[~c.customer_id.isin(taken)]
     if pool.empty:
-        pool = c[c.marketing_opt_in]
+        pool = c
     return pool.customer_id.iloc[rng.randrange(len(pool))]
 
 
@@ -118,14 +122,38 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     cid = store.get_shopper(chat_id)
     if cid is None:
-        cid = pick_shopper(store.assigned_ids())
+        await update.message.reply_text(
+            "🌰 Welcome to <b>Nishtha's Pantry</b>! Dry fruits, nuts and makhana, delivered.\n\nHave you shopped with us before?",
+            parse_mode=HTML, reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🆕 I'm new here", callback_data="who:new"),
+                InlineKeyboardButton("🛍 I've shopped before", callback_data="who:returning")]]))
+        return
+    await update.message.reply_text(welcome_text(cid), parse_mode=HTML)
+
+
+def welcome_text(cid: str) -> str:
+    c = DATA["customers"].set_index("customer_id").loc[cid]
+    if c.orders_total == 0:
+        intro = (f"Welcome, <b>{escape(c['name'])}</b>! This is your first time here, so your first order has a welcome treat. "
+                 "Send /offer to see it, or /offers for deals everyone can use.")
+    else:
+        intro = (f"Welcome back, <b>{escape(c['name'])}</b>! Send /offer for a personal offer, /offers for live deals, "
+                 "/profile for your order history.")
+    return intro + "\n\n<i>Hackathon demo: you're playing a synthetic customer.</i>"
+
+
+async def choose_identity(update: Update, kind: str) -> None:
+    """Button under /start: become a first-time or a returning synthetic customer."""
+    q = update.callback_query
+    chat_id = update.effective_chat.id
+    await q.answer()
+    cid = store.get_shopper(chat_id)
+    if cid is None:
+        cid = pick_shopper(store.assigned_ids(), first_time=(kind == "new"))
         store.assign_shopper(chat_id, cid)
-        log.info("New shopper chat -> %s", cid)
-    name = DATA["customers"].set_index("customer_id").loc[cid, "name"]
-    await update.message.reply_text(
-        f"🌰 Welcome to <b>Nishtha's Pantry</b>!\n\nYou're shopping as the synthetic customer <b>{escape(name)}</b>. "
-        "Send /offer for a personal offer, /offers for live deals, /profile for your history.\n\n"
-        "<i>Hackathon demo: all shoppers are synthetic.</i>", parse_mode=HTML)
+        log.info("New shopper chat -> %s (%s)", cid, kind)
+    await q.edit_message_reply_markup(None)
+    await q.message.reply_text(welcome_text(cid), parse_mode=HTML)
 
 
 async def _shopper_or_hint(update: Update) -> str | None:
@@ -331,6 +359,9 @@ async def customer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     act, _, oid = (q.data or "").partition(":")
+    if act == "who":
+        await choose_identity(update, oid)
+        return
     o = store.get_offer(oid)
     if o is None:
         await q.answer("Offer not found", show_alert=True)

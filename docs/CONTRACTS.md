@@ -21,6 +21,7 @@ global:
   min_stock_for_offer: 20
   respect_marketing_opt_in: true
 category_caps_pct: {Makhana: 15, Nuts: 12, Fasting: 10, ...}   # optional per-category max discount
+first_order: {welcome_discount_pct: 10, min_order_value: 499}  # welcome offer: first-order customers only, once ever
 ```
 
 ## src/data_loader.py
@@ -51,7 +52,9 @@ segment_customers(data) -> pd.DataFrame   # customer_id, segment, recency, frequ
  "source": "rule_engine" | "ai_agent" | "seller_chat",
  "status": "pending" | "approved" | "rejected" | "blocked",
  "blocked_reasons": [str],              # filled when rules reject
- "created_at": iso timestamp, "decided_at": iso timestamp | None
+ "created_at": iso timestamp, "decided_at": iso timestamp | None,
+ "is_welcome": bool (optional),          # first-order welcome offer (personal); checked by rules first_order section
+ "min_order_value": int (optional)       # ₹ minimum basket for the offer
 }
 ```
 

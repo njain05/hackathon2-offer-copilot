@@ -25,7 +25,8 @@ def seller_card(offer: dict, data: dict) -> str:
             f"🎯 <b>Who:</b> {escape(offer['target'])}\n"
             f"🛍 <b>What:</b> {escape(_names(data, offer['product_ids']))}\n"
             f"🏷 <b>{offer['discount_pct']}% off</b> · code <code>{escape(offer['code'])}</code>\n"
-            f"📅 {offer['valid_from']} → {offer['valid_to']}\n"
+            + (f"🧺 Minimum order ₹{offer['min_order_value']} (welcome offer, once per customer)\n" if offer.get("min_order_value") else "")
+            + f"📅 {offer['valid_from']} → {offer['valid_to']}\n"
             f"📉 Lowest margin after discount: <b>{_margin_after(data, offer)}</b> ✅ within rules\n\n"
             f"🧠 <b>Why:</b> {escape(offer['rationale'])}\n"
             f"📈 <b>Impact:</b> {escape(offer['expected_impact'])}")
@@ -34,7 +35,8 @@ def seller_card(offer: dict, data: dict) -> str:
 def customer_message(offer: dict, data: dict) -> str:
     return (f"🎁 <b>{escape(offer['title'])}</b>\n\n{escape(offer['message'])}\n\n"
             f"🏷 <b>{offer['discount_pct']}% off</b> on {escape(_names(data, offer['product_ids']))}\n"
-            f"🔖 Code: <code>{escape(offer['code'])}</code>\n⏳ Valid until {offer['valid_to']}")
+            + (f"🧺 On orders of ₹{offer['min_order_value']} or more\n" if offer.get("min_order_value") else "")
+            + f"🔖 Code: <code>{escape(offer['code'])}</code>\n⏳ Valid until {offer['valid_to']}")
 
 
 def profile_card(cid: str, data: dict) -> str:

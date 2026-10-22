@@ -37,6 +37,14 @@ def run(coro):
     return asyncio.run(coro)
 
 
+def join(update, kind: str = "returning"):
+    """/start, then tap "I'm new here" or "I've shopped before"."""
+    run(bot.start(update, ctx()))
+    q = SimpleNamespace(data=f"who:{kind}", answer=AsyncMock(), edit_message_reply_markup=AsyncMock(),
+                        message=SimpleNamespace(reply_text=update.message.reply_text))
+    run(bot.button(SimpleNamespace(callback_query=q, effective_chat=update.effective_chat), ctx()))
+
+
 def test_pick_shopper_is_opted_in_and_unique():
     taken = set()
     for _ in range(20):
@@ -55,9 +63,9 @@ def test_find_customers_by_id_and_name():
 
 def test_customer_flow_start_profile_offer():
     u = msg_update(111)
-    run(bot.start(u, ctx()))
+    join(u)
     cid = store.get_shopper(111)
-    assert cid and "synthetic customer" in texts(u)
+    assert cid and "Welcome back" in texts(u)
     run(bot.profile(u, ctx()))
     run(bot.offer(u, ctx()))
     for o in store.get_offers():  # anything the shopper got passed the rules
@@ -87,7 +95,7 @@ def press(chat_id: int, data: str, html: str = "card"):
 
 def test_campaigns_allow_publishes_and_reaches_shoppers():
     shopper = msg_update(111)
-    run(bot.start(shopper, ctx()))
+    join(shopper)
     seller = msg_update(222)
     run(bot.seller(seller, ctx("secret")))
     run(bot.campaigns(seller, ctx()))
@@ -161,7 +169,7 @@ def test_no_offer_message_is_customer_friendly():
 
 def test_seller_chat_is_not_a_shopper():
     u = msg_update(222)
-    run(bot.start(u, ctx()))                      # starts as a shopper...
+    join(u)                      # starts as a shopper...
     assert store.get_shopper(222)
     run(bot.seller(u, ctx("secret")))             # ...then becomes the seller
     assert store.get_shopper(222) is None
@@ -197,7 +205,7 @@ def test_two_bots_seller_can_also_shop_and_offers_go_via_customer_bot(monkeypatc
     monkeypatch.setattr(bot, "TWO_BOTS", True)
     monkeypatch.setattr(bot, "CUSTOMER_BOT", customer_bot)
     me = 222  # same Telegram user in both bots (private chat id == user id)
-    run(bot.start(msg_update(me), ctx()))         # customer bot
+    join(msg_update(me))         # customer bot
     seller = msg_update(me)
     run(bot.seller(seller, ctx("secret")))        # seller bot
     assert store.get_shopper(me)                  # still a shopper in the customer bot
@@ -216,3 +224,55 @@ def test_two_bot_apps_split_commands():
     sell = commands(bot.build_seller_app("654321:TEST-seller"))
     assert {"start", "offer", "offers", "profile"} <= cust and "campaigns" not in cust and "seller" not in cust
     assert {"seller", "campaigns", "pending", "customer"} <= sell and "offer" not in sell
+
+
+
+# ---------- first-time customers ----------
+def welcome_offer(cid):
+    from src import recommender
+    prof = recommender.customer_profile(bot.DATA, bot.SEGS, cid)
+    return recommender._welcome_candidate(bot.DATA, load_rules(), prof, [])
+
+
+def first_timer():
+    c = bot.DATA["customers"]
+    return c[(c.orders_total == 0) & c.marketing_opt_in].customer_id.iloc[0]
+
+
+def test_new_here_gets_first_time_customer_and_welcome_offer():
+    u = msg_update(444)
+    join(u, "new")
+    cid = store.get_shopper(444)
+    assert int(bot.DATA["customers"].set_index("customer_id").loc[cid, "orders_total"]) == 0
+    assert "first time" in texts(u)
+    run(bot.offer(u, ctx()))
+    [o] = store.get_offers("approved")
+    assert o["is_welcome"] and o["min_order_value"] == 499 and o["code"].startswith("WELCOME")
+    assert "On orders of ₹499 or more" in texts(u)
+
+
+def test_returning_gets_customer_with_history():
+    u = msg_update(555)
+    join(u, "returning")
+    cid = store.get_shopper(555)
+    assert int(bot.DATA["customers"].set_index("customer_id").loc[cid, "orders_total"]) > 0
+
+
+def test_welcome_rules():
+    r = load_rules()
+    cid = first_timer()
+    w = welcome_offer(cid)
+    assert validate_offer(w, bot.DATA, r, []).ok
+    # too generous -> lowered to the welcome cap
+    v = validate_offer({**w, "discount_pct": 25}, bot.DATA, r, [])
+    assert not v.ok and v.adjusted_offer["discount_pct"] == r["first_order"]["welcome_discount_pct"]
+    # no minimum basket -> blocked
+    assert not validate_offer({**w, "min_order_value": 0}, bot.DATA, r, []).ok
+    # second welcome offer -> blocked
+    given = {**w, "status": "approved", "created_at": "2026-09-01T10:00:00"}
+    v = validate_offer(w, bot.DATA, r, [given])
+    assert not v.ok and any("already received a welcome" in x for x in v.reasons)
+    # customer who has ordered before -> blocked
+    regular = bot.DATA["customers"].query("orders_total > 0").customer_id.iloc[0]
+    v = validate_offer({**w, "target": regular}, bot.DATA, r, [])
+    assert not v.ok and any("only for first orders" in x for x in v.reasons)
