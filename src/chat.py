@@ -32,6 +32,13 @@ TOOLS = [
            "product_ids": {"type": "array", "items": _S}, "discount_pct": _I,
            "valid_days": {**_I, "description": "how many days from today it runs"},
            "rationale": {**_S, "description": "one sentence for the seller"}}),
+    _tool("draft_group_offer", "Draft an offer for a specific group of customers, e.g. by city, favourite category, first-time buyers "
+          "or open carts (combine with segments). Rule-checked and shown with Approve/Reject; NOT published.",
+          {"segments": {"type": "array", "items": _S, "description": "segment keys, empty = any"},
+           "cities": {"type": "array", "items": _S}, "categories": {"type": "array", "items": _S, "description": "favourite categories"},
+           "first_time_only": {"type": "boolean"}, "with_cart": {"type": "boolean"},
+           "product_ids": {"type": "array", "items": _S}, "discount_pct": _I, "valid_days": _I,
+           "title": _S, "message": {**_S, "description": "customer-facing, max 35 words"}, "rationale": _S}),
     _tool("run_campaigns", "Analyse the business and propose a fresh set of campaigns.", {}),
     _tool("show_stats", "Show offer results: approved, pending, rejected, blocked.", {}),
     _tool("list_offers", "List offers waiting for approval or currently live.",
@@ -58,15 +65,20 @@ def context(data: dict, segs: pd.DataFrame, rules: dict) -> str:
     offers = [{k: o[k] for k in ("offer_id", "title", "target", "discount_pct", "status", "valid_to")}
               for o in store.get_offers() if o["status"] == "pending" or (o["status"] == "approved" and o["valid_to"] >= TODAY.isoformat())]
     counts = segs.segment.value_counts().to_dict()
+    cities = sorted(data["customers"].city.unique().tolist())
     return json.dumps({
         "today": TODAY.isoformat(), "festivals": {"Navratri": "ended 19 Oct", "Diwali": "8 Nov 2026"},
         "segments": {k: {"meaning": SEGMENT_NAMES[k], "customers": int(v)} for k, v in counts.items()},
-        "rules": rules, "catalogue": p.to_dict("records"), "pending_and_live_offers": offers,
+        "cities": cities, "rules": rules, "catalogue": p.to_dict("records"), "pending_and_live_offers": offers,
     }, default=str, ensure_ascii=False)
 
 
-def interpret(text: str, data: dict, segs: pd.DataFrame, rules: dict) -> dict | None:
-    """{'reply': str} or {'tool': name, 'input': {...}}; None if the AI is unavailable."""
+def interpret(text: str, data: dict, segs: pd.DataFrame, rules: dict, history: list[dict] | None = None) -> dict | None:
+    """{'reply': str} or {'tool': name, 'input': {...}}; None if the AI is unavailable.
+    history: earlier turns [{'role': 'seller'|'assistant', 'text': str}] so "make it 10% instead" makes sense."""
     if not agent.available():
         return None
+    if history:
+        lines = "\n".join(f"{'Seller' if h.get('role') == 'seller' else 'You'}: {str(h.get('text', ''))[:400]}" for h in history[-6:])
+        text = f"Earlier in this conversation:\n{lines}\n\nThe seller now says: {text}"
     return agent.assistant_turn(SYSTEM + "\n\nCONTEXT:\n" + context(data, segs, rules), text, TOOLS)

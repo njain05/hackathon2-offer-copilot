@@ -100,7 +100,7 @@ propose_offers(data, segments, today, rules) -> list[dict]   # LLM returns JSON 
 ## src/bot.py
 Telegram bot (python-telegram-bot v21). Commands: /start, /offers (generate+send pending cards), /pending, /live, /customer <id or name>, /stats, /help.
 Callback data: `allow:<offer_id>` / `reject:<offer_id>`. Allow => re-validate => set_status approved => export_public_offers.
-Env: TELEGRAM_BOT_TOKEN (customer bot), SELLER_BOT_TOKEN (optional separate seller bot; both run in one process), SELLER_CODE (/seller <code> unlocks seller mode).
+Env: TELEGRAM_BOT_TOKEN (customer bot), SELLER_BOT_TOKEN (optional separate seller bot; both run in one process), SELLER_CODE (/seller <code> unlocks seller mode for any chat that knows it; /logout leaves).
 
 ## src/chat.py (seller chat in plain language)
 ```python
@@ -128,5 +128,5 @@ select(data, segs, rules, filters) -> {customer_ids, count, matched, excluded_op
 ## src/api.py (dashboard server: python -m src.api, port 8000; every call needs header X-Seller-Code = SELLER_CODE)
 GET /api/dashboard · GET /api/options · GET /api/customer?q= ·
 POST /api/audience · /api/check (dry run) · /api/offers (create, pending) · /api/offers/<id>/approve|reject|end ·
-/api/ask (plain words -> form) · /api/write (AI copy) · /api/customers/<id>/suggest · /api/rules ({rule, value, category, confirm})
+/api/ask (plain words -> form) · /api/write (AI copy) · /api/customers/<id>/suggest · /api/rules ({rule, value, category, confirm}) · /api/chat ({text, history}) -> {text, offers?, confirm?}
 Approve re-validates; a group offer is only delivered to its customer_ids. Paths override for previews: OFFER_STATE_FILE, OFFER_AUDIT_FILE, OFFER_PUBLIC_FILE, OFFER_DASHBOARD_FILE.

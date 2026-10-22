@@ -120,3 +120,44 @@ def test_lowered_offer_text_shows_the_real_discount():
     assert "15%" not in res["preview"] and "12% off nuts" in res["preview"] and "It's Diwali" in res["preview"] and "&amp;" not in res["preview"]
     o = api.create(d)["offer"]
     assert o["discount_pct"] == 12 and o["title"] == "12% off nuts" and "Get 12% off" in o["message"] and o["code"].endswith("12")
+
+
+# ---------- dashboard chat (fake Claude) ----------
+def chat_as(monkeypatch, answer):
+    from src import chat
+    seen = {}
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-not-real")
+    def fake(text, data, segs, rules, history=None):
+        seen.update(text=text, history=history)
+        return answer
+    monkeypatch.setattr(chat, "interpret", fake)
+    return seen
+
+
+def test_chat_group_offer_by_city_is_drafted_and_lowered(monkeypatch):
+    chat_as(monkeypatch, {"tool": "draft_group_offer", "input": {
+        "segments": ["lapsed"], "cities": ["Ludhiana"], "categories": [], "first_time_only": False, "with_cart": False,
+        "product_ids": ["P004"], "discount_pct": 20, "valid_days": 7, "title": "20% off almonds", "message": "Almonds at 20% off", "rationale": "x"}})
+    r = api.chat_turn({"text": "20% off almonds for lapsed customers in Ludhiana"})
+    [o] = r["offers"]
+    assert o["status"] == "pending" and o["target"] == "GROUP" and o["discount_pct"] == 12 and o["title"] == "12% off almonds"
+    assert "lowered it to 12%" in r["text"]
+
+
+def test_chat_rule_change_needs_confirm(monkeypatch, world):
+    chat_as(monkeypatch, {"tool": "change_rule", "input": {"rule": "category_cap", "category": "Seeds", "new_value": 15}})
+    r = api.chat_turn({"text": "lower seeds limit to 15"})
+    assert r["confirm"] == {"kind": "rule", "rule": "category_cap", "category": "Seeds", "value": 15}
+    assert load_rules(world)["category_caps_pct"]["Seeds"] == 20     # nothing changed yet
+
+
+def test_chat_passes_history_and_plain_replies(monkeypatch):
+    seen = chat_as(monkeypatch, {"reply": "Gift boxes are capped at 12%."})
+    r = api.chat_turn({"text": "and gift boxes?", "history": [{"role": "seller", "text": "can I give 25% on nuts?"}]})
+    assert r == {"text": "Gift boxes are capped at 12%."} and seen["history"][0]["text"] == "can I give 25% on nuts?"
+
+
+def test_chat_without_key_explains(monkeypatch):
+    with pytest.raises(api.ApiError) as e:
+        api.chat_turn({"text": "hi"})
+    assert e.value.status == 503

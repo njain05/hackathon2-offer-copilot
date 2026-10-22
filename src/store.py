@@ -143,9 +143,36 @@ def assigned_ids() -> set[str]:
     return set(_load()["shoppers"].values())
 
 
+def get_sellers() -> set[int]:
+    """Every chat that unlocked seller mode with the code (older state files kept a single seller_chat_id)."""
+    s = _load()
+    ids = set(s.get("seller_chat_ids") or [])
+    if s.get("seller_chat_id") is not None:
+        ids.add(s["seller_chat_id"])
+    return {int(x) for x in ids}
+
+
+def is_seller_chat(chat_id: int) -> bool:
+    return int(chat_id) in get_sellers()
+
+
 def get_seller() -> int | None:
-    return _load().get("seller_chat_id")
+    """The first seller (kept for older callers)."""
+    ids = get_sellers()
+    return min(ids) if ids else None
 
 
 def set_seller(chat_id: int) -> None:
-    s = _load(); s["seller_chat_id"] = chat_id; _save(s)
+    s = _load()
+    ids = set(s.get("seller_chat_ids") or []) | ({s.pop("seller_chat_id")} if s.get("seller_chat_id") is not None else set())
+    s["seller_chat_ids"] = sorted(ids | {int(chat_id)})
+    s.pop("seller_chat_id", None)
+    _save(s)
+
+
+def remove_seller(chat_id: int) -> None:
+    s = _load()
+    ids = set(s.get("seller_chat_ids") or []) | ({s.pop("seller_chat_id")} if s.get("seller_chat_id") is not None else set())
+    s["seller_chat_ids"] = sorted(ids - {int(chat_id)})
+    s.pop("seller_chat_id", None)
+    _save(s)

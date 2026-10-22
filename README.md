@@ -17,7 +17,7 @@ Two Telegram bots, one program: a **customer bot** (classmates use it; this is t
 
 **Customer bot** — `/start` gives you a synthetic customer · `/profile` your orders, cart, points · `/offer` a personal offer chosen for you · `/offers` live deals.
 
-**Seller bot** — `/seller <SELLER_CODE>` once, then `/campaigns` (proposes offers, each checked by `rules.yaml`, sent as cards with ✅ Allow / ❌ Reject) · `/pending` · `/live` · `/stats` · `/audit` (offers the rules lowered or blocked) · `/customer <name or id>`.
+**Seller bot** — private: nothing works until someone sends `/seller <SELLER_CODE>`. Give the code only to your team; anyone with it can unlock seller mode, nobody else can. The bot deletes the message with the code, locks a chat for 10 minutes after 5 wrong codes, and `/logout` removes access. Then `/campaigns` (proposes offers, each checked by `rules.yaml`, sent as cards with ✅ Allow / ❌ Reject) · `/pending` · `/live` · `/stats` · `/audit` (offers the rules lowered or blocked) · `/customer <name or id>`.
 
 **Talk to the seller bot in plain English** (needs `ANTHROPIC_API_KEY`). Examples:
 - "What should I offer Rohit?" → his profile and a suggested offer with Allow / Reject
@@ -44,7 +44,9 @@ Open http://localhost:8000/offers.html. Before anything is approved, open http:/
 ```bash
 .venv/bin/python -m src.api
 ```
-Open http://localhost:8000/dashboard.html and enter your `SELLER_CODE`. The same server also serves the store's offers page at /offers.html.
+Open http://localhost:8000/dashboard.html and enter your `SELLER_CODE` (the same private code as the seller bot).
+
+**Ask Copilot** (bottom-right, needs `ANTHROPIC_API_KEY`): chat with the assistant from the dashboard: "What should I offer Harpreet?", "15% off almonds for lapsed customers in Ludhiana", "Can I give 25% on gift boxes?", "Propose Diwali campaigns", "Raise the Makhana limit to 18%". Drafts appear as cards with Approve / Reject; rule changes and ending an offer ask you to Confirm. It remembers the last few messages, so "make it 10% instead" works. The same server also serves the store's offers page at /offers.html.
 
 What the team can see: revenue and orders, customers going quiet and the spend at stake, open carts, the festival effect (Navratri, Rakhi, Diwali countdown), customer groups and what the engine does for each, category stock cover and discount limits, every offer and its status, the guardrail log, and the rules in force.
 

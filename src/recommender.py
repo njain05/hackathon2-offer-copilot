@@ -80,6 +80,20 @@ def with_discount(offer: dict, new: int) -> dict:
             "code": _recode(offer.get("code", ""), old, int(new))}
 
 
+def group_offer(data: dict, segs: pd.DataFrame, rules: dict, filters: dict, product_ids: list, discount_pct: int, valid_days: int,
+                title: str, message: str, rationale: str = "", source: str = "dashboard") -> tuple[dict, dict]:
+    """Offer for a chosen group of customers (segment / city / category / first-time / cart). Not stored; run it through run_pipeline."""
+    from src import audience
+    known = set(data["products"].product_id)
+    pids = [x for x in product_ids or [] if x in known]
+    sel = audience.select(data, segs, rules, filters)
+    o = _offer("group", (title or "").strip() or "Special offer", (message or "").strip() or f"{int(discount_pct)}% off, just for you.",
+               "GROUP", pids, int(discount_pct or 0), max(1, min(int(valid_days or 7), 60)),
+               rationale or f"Chosen for {sel['label']}.", f"Reaches {sel['count']} customers", source=source)
+    o.update(customer_ids=sel["customer_ids"], audience_label=sel["label"], audience=sel["filters"])
+    return o, sel
+
+
 def run_pipeline(data: dict, rules: dict, candidates: list[dict], history_fn=store.history_for) -> dict:
     res = {"stored": [], "adjusted": [], "blocked": [], "skipped": []}
     for c in candidates:

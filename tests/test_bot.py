@@ -21,8 +21,9 @@ def tmp_store(tmp_path, monkeypatch):
 
 
 def msg_update(chat_id: int):
-    message = SimpleNamespace(reply_text=AsyncMock())
-    return SimpleNamespace(effective_chat=SimpleNamespace(id=chat_id), message=message, effective_message=message)
+    message = SimpleNamespace(reply_text=AsyncMock(), delete=AsyncMock())
+    chat = SimpleNamespace(id=chat_id, send_message=message.reply_text, send_action=AsyncMock())
+    return SimpleNamespace(effective_chat=chat, message=message, effective_message=message)
 
 
 def ctx(*args):
@@ -73,17 +74,33 @@ def test_customer_flow_start_profile_offer():
         assert validate_offer(o, bot.DATA, load_rules(), []).ok
 
 
-def test_seller_needs_code_and_is_exclusive():
+def test_seller_needs_code():
     u = msg_update(222)
     run(bot.campaigns(u, ctx()))
     assert "Seller only" in texts(u)
+    run(bot.seller(u, ctx()))
+    assert "private" in texts(u) and not store.get_sellers()
     run(bot.seller(u, ctx("wrong")))
-    assert store.get_seller() is None
+    assert not store.get_sellers() and u.message.delete.await_count == 1     # the typed code is deleted from the chat
     run(bot.seller(u, ctx("secret")))
-    assert store.get_seller() == 222
-    other = msg_update(333)
-    run(bot.seller(other, ctx("secret")))
-    assert "already claimed" in texts(other)
+    assert store.get_sellers() == {222}
+    teammate = msg_update(333)                                               # someone the owner gave the code to
+    run(bot.seller(teammate, ctx("secret")))
+    assert store.get_sellers() == {222, 333}
+    stranger = msg_update(444)
+    run(bot.campaigns(stranger, ctx()))
+    assert "Seller only" in texts(stranger) and not store.get_offers()
+    run(bot.logout(teammate, ctx()))
+    assert store.get_sellers() == {222}
+
+
+def test_wrong_codes_lock_the_chat():
+    u = msg_update(555)
+    for _ in range(bot.MAX_TRIES):
+        run(bot.seller(u, ctx("guess")))
+    run(bot.seller(u, ctx("secret")))                                        # even the right code waits out the lock
+    assert "Too many wrong codes" in texts(u) and not store.is_seller_chat(555)
+    bot.FAILED_TRIES.clear()
 
 
 def press(chat_id: int, data: str, html: str = "card"):

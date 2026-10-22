@@ -5,6 +5,7 @@ Every write needs the X-Seller-Code header (= SELLER_CODE in .env). Every offer 
 (via recommender.run_pipeline on create, and again on approve), exactly like the bots.
 """
 import asyncio
+import hmac
 import html
 import json
 import logging
@@ -17,7 +18,7 @@ from urllib.parse import parse_qs, urlparse
 
 from dotenv import load_dotenv
 
-from src import agent, audience, bot, dashboard, messages, recommender, store
+from src import agent, audience, bot, chat, dashboard, messages, recommender, store
 from src.data_loader import ROOT, TODAY
 from src.rules import apply_change, describe_change, load_rules, validate_offer
 
@@ -45,11 +46,7 @@ def draft_to_offer(d: dict, rules: dict) -> tuple[dict, dict | None]:
         o = recommender._offer("public", title, message, "ALL", pids, disc, days, d.get("rationale") or "Created on the dashboard.",
                                "Seller-created offer", source="dashboard")
         return o, None
-    sel = audience.select(DATA, SEGS, rules, d.get("filters"))
-    o = recommender._offer("group", title, message, "GROUP", pids, disc, days, d.get("rationale") or f"Created on the dashboard for {sel['label']}.",
-                           f"Reaches {sel['count']} customers", source="dashboard")
-    o.update(customer_ids=sel["customer_ids"], audience_label=sel["label"], audience=sel["filters"])
-    return o, sel
+    return recommender.group_offer(DATA, SEGS, rules, d.get("filters"), pids, disc, days, title, message, d.get("rationale") or "", "dashboard")
 
 
 def check(d: dict) -> dict:
@@ -205,6 +202,96 @@ def change_rule(d: dict) -> dict:
     return {"preview": done, "applied": True, "rules": load_rules()}
 
 
+# ---------- dashboard chat ----------
+def _pipeline_result(cand: dict) -> dict:
+    res = recommender.run_pipeline(DATA, load_rules(), [cand])
+    if res["skipped"]:
+        return {"text": "An offer with that name for that audience is already waiting or live. See Offers below."}
+    oid = (res["stored"] + res["adjusted"] + res["blocked"])[0]
+    o = store.get_offer(oid)
+    if res["blocked"]:
+        return {"text": "The rules blocked this offer:\n• " + "\n• ".join(o["blocked_reasons"]), "offers": [o]}
+    if res["adjusted"]:
+        return {"text": f"You asked for {cand['discount_pct']}%, but that breaks a limit, so I lowered it to {o['discount_pct']}%. Approve it when you're happy.", "offers": [o]}
+    who = f" It reaches {len(o['customer_ids'])} customers." if o.get("customer_ids") else ""
+    return {"text": f"Drafted and within the rules.{who} Approve it to send it out.", "offers": [o]}
+
+
+def chat_turn(body: dict) -> dict:
+    """One message in the dashboard chat: Claude answers or picks an action; we carry it out with the same rule-checked code."""
+    text = str(body.get("text", "")).strip()[:600]
+    if not text:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Type a message first.")
+    if not agent.available():
+        raise ApiError(HTTPStatus.SERVICE_UNAVAILABLE, "The chat needs ANTHROPIC_API_KEY in .env. Everything else on the dashboard works without it.")
+    history = [h for h in body.get("history") or [] if isinstance(h, dict)][-6:]
+    res = chat.interpret(text, DATA, SEGS, load_rules(), history)
+    if res is None:
+        raise ApiError(HTTPStatus.BAD_GATEWAY, "I couldn't work that out just now. Try rephrasing.")
+    if "reply" in res:
+        return {"text": res["reply"]}
+    tool, a = res["tool"], res["input"]
+    log.info("Dashboard chat action: %s", tool)
+    if tool == "suggest_for_customer":
+        found = find_customer(a.get("query", ""))
+        if found["matches"]:
+            return {"text": "Several customers match. Which one?\n" + "\n".join(f"• {m['name']} ({m['city']}, {m['customer_id']})" for m in found["matches"])}
+        if not found.get("customer"):
+            return {"text": "I couldn't find that customer."}
+        c = found["customer"]
+        intro = f"{c['name']} ({c['city']}): {c['segment_label']}, {c['orders_total']} orders, ₹{c['lifetime_value']:,} spent."
+        if not c["marketing_opt_in"]:
+            return {"text": intro + " They opted out of marketing, so no offer."}
+        s = suggest_for(c["customer_id"])
+        if not s["offer"]:
+            return {"text": f"{intro} No discount: {s['explanation']}"}
+        return {"text": f"{intro} {s['explanation']}", "offers": [s["offer"]]}
+    if tool == "draft_offer":
+        target = a.get("target", "ALL")
+        kind = "personal" if target in set(DATA["customers"].customer_id) else "public"
+        cand = recommender._offer(kind, a.get("title", "Special offer"), a.get("message", ""), target,
+                                  [x for x in a.get("product_ids", []) if x in set(DATA["products"].product_id)],
+                                  int(a.get("discount_pct", 0)), max(1, min(int(a.get("valid_days", 7)), 60)),
+                                  a.get("rationale", "Asked for in the dashboard chat."), "Seller-requested offer", source="dashboard")
+        return _pipeline_result(cand)
+    if tool == "draft_group_offer":
+        f = {k: a.get(k) for k in ("segments", "cities", "categories", "first_time_only", "with_cart")}
+        o, sel = recommender.group_offer(DATA, SEGS, load_rules(), f, a.get("product_ids"), a.get("discount_pct", 0), a.get("valid_days", 7),
+                                         a.get("title", ""), a.get("message", ""), a.get("rationale", ""), "dashboard")
+        if not sel["count"]:
+            return {"text": f"No customers match {sel['label']} right now (after leaving out opted-out and recently-offered customers)."}
+        return _pipeline_result(o)
+    if tool == "run_campaigns":
+        r = load_rules()
+        ai = recommender.ai_campaigns(DATA, SEGS, r) if agent.available() else None
+        res = recommender.run_pipeline(DATA, r, ai or recommender.generate_candidates(DATA, SEGS, r))
+        new = [store.get_offer(i) for i in res["stored"] + res["adjusted"]]
+        return {"text": f"{'Claude' if ai else 'The rule engine'} proposed {len(new)} campaign(s): {len(res['adjusted'])} lowered by the rules, "
+                        f"{len(res['blocked'])} blocked, {len(res['skipped'])} already waiting or live.", "offers": new}
+    if tool == "show_stats":
+        k = dashboard.build(DATA, SEGS, load_rules())["kpis"]
+        return {"text": f"Live offers: {k['offers_live']} · waiting for you: {k['offers_pending']} · rejected: {k['offers_rejected']} · "
+                        f"blocked by rules: {k['offers_blocked']} · guardrail saves: {k['guardrail_saves']}.\n"
+                        f"Revenue in the last 30 days: ₹{k['revenue_30']:,} ({k['revenue_delta_pct']:+}% vs the 30 before)."}
+    if tool == "list_offers":
+        which = a.get("which", "pending")
+        items = [o for o in store.get_offers("pending")] if which == "pending" else [o for o in store.get_offers("approved") if bot.is_live(o)]
+        return {"text": f"{len(items)} offer(s) {'waiting for approval' if which == 'pending' else 'live'}." if items else f"Nothing {which} right now.", "offers": items[-8:]}
+    if tool == "end_offer":
+        o = store.get_offer(a.get("offer_id", ""))
+        if o is None or not bot.is_live(o):
+            return {"text": "I couldn't find that live offer."}
+        return {"text": f"Take “{o['title']}” ({o['discount_pct']}% off) down? Customers will stop seeing it.", "confirm": {"kind": "end", "offer_id": o["offer_id"]}}
+    if tool == "change_rule":
+        key, value, cat = a.get("rule", ""), int(a.get("new_value", 0)), a.get("category", "")
+        preview, err = describe_change(key, value, cat, load_rules())
+        if err:
+            return {"text": f"I can't change that: {err}"}
+        return {"text": f"Change the rules? {preview}. New offers are checked against the new limit.",
+                "confirm": {"kind": "rule", "rule": key, "category": cat, "value": value}}
+    return {"text": "I'm not sure how to do that yet. Try the Create an offer form."}
+
+
 # ---------- HTTP ----------
 GET_ROUTES = {
     "/api/dashboard": lambda q: dashboard.build(DATA, SEGS, load_rules()),
@@ -220,6 +307,7 @@ POST_ROUTES = [
     (r"^/api/write$", lambda b, m: write_copy(b)),
     (r"^/api/customers/(C\d+)/suggest$", lambda b, m: suggest_for(m.group(1))),
     (r"^/api/rules$", lambda b, m: change_rule(b)),
+    (r"^/api/chat$", lambda b, m: chat_turn(b)),
 ]
 
 
@@ -244,7 +332,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _authorised(self) -> bool:
         code = os.getenv("SELLER_CODE", "")
-        return bool(code) and self.headers.get("X-Seller-Code", "") == code
+        return bool(code) and hmac.compare_digest(self.headers.get("X-Seller-Code", "").encode(), code.encode())
 
     def _run(self, fn) -> None:
         if not self._authorised():

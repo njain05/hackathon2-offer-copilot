@@ -6,9 +6,11 @@ Run from repo root:  .venv/bin/python -m src.bot
 Every offer shown or published here has passed rules.validate_offer (recommender does it; Allow re-checks).
 """
 import asyncio
+import hmac
 import logging
 import os
 import random
+import time
 from html import escape
 
 import pandas as pd
@@ -78,12 +80,12 @@ def active_personal_offer(cid: str) -> dict | None:
 def audience_chats(offer: dict) -> list[int]:
     """Classmate chats whose synthetic shopper is targeted by a public offer and opted in to marketing."""
     shoppers = store.all_shoppers()
-    seller = store.get_seller()
+    sellers = store.get_sellers()
     seg = SEGS.set_index("customer_id").segment
     opted = DATA["customers"].set_index("customer_id").marketing_opt_in
     out = []
     for chat_id, cid in shoppers.items():
-        if (int(chat_id) == seller and not TWO_BOTS) or not bool(opted.get(cid, False)):
+        if (int(chat_id) in sellers and not TWO_BOTS) or not bool(opted.get(cid, False)):
             continue
         if offer["target"] in ("ALL", cid) or seg.get(cid) == offer["target"] or cid in (offer.get("customer_ids") or []):
             out.append(int(chat_id))
@@ -124,7 +126,7 @@ def customer_keyboard(offer_id: str) -> InlineKeyboardMarkup:
 
 
 def is_seller(update: Update) -> bool:
-    return update.effective_chat is not None and update.effective_chat.id == store.get_seller()
+    return update.effective_chat is not None and store.is_seller_chat(update.effective_chat.id)
 
 
 # ---------- customer mode ----------
@@ -215,7 +217,7 @@ SHOPPER_HELP = ("<b>Shopper commands</b>\n/start · your synthetic shopper\n/pro
                 "/offer · a personal offer picked for you\n/offers · live deals for everyone\n")
 SELLER_HELP = ("<b>Seller commands</b>\n/campaigns · analyse and propose offers\n/pending · offers waiting for you\n"
                "/live · offers customers can see\n/stats · results\n/audit · offers the rules changed or blocked\n"
-               "/customer &lt;name or id&gt; · suggest an offer for one customer")
+               "/customer &lt;name or id&gt; · suggest an offer for one customer\n/logout · leave seller mode")
 
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -234,29 +236,51 @@ async def help_seller(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 # ---------- seller mode ----------
+FAILED_TRIES: dict[int, list[float]] = {}  # chat id -> times of recent wrong codes
+MAX_TRIES, LOCK_SECONDS = 5, 600
+
+
 async def seller(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/seller <code>: anyone the owner gave the code to can unlock seller mode; nobody else."""
     code = os.getenv("SELLER_CODE", "")
-    current = store.get_seller()
     chat_id = update.effective_chat.id
-    if current is not None and current != chat_id:
-        await update.message.reply_text("Seller mode is already claimed.")
+    if context.args:
+        try:
+            await update.message.delete()  # don't leave the code sitting in the chat
+        except Exception:
+            pass
+    if store.is_seller_chat(chat_id):
+        await update.effective_chat.send_message("🧑‍💼 You're already in seller mode. /help shows the commands, /logout leaves.")
+        return
+    now = time.time()
+    tries = [t for t in FAILED_TRIES.get(chat_id, []) if now - t < LOCK_SECONDS]
+    if len(tries) >= MAX_TRIES:
+        await update.effective_chat.send_message("🔒 Too many wrong codes. Try again in 10 minutes.")
         return
     if not context.args:
-        await update.message.reply_text("Usage: /seller <code>")
+        await update.effective_chat.send_message("🔒 The seller console is private. Send /seller followed by the code the owner gave you.")
         return
-    if not code or context.args[0] != code:
-        await update.message.reply_text("Wrong seller code.")
+    if not code or not hmac.compare_digest(context.args[0].encode(), code.encode()):
+        FAILED_TRIES[chat_id] = tries + [now]
+        log.warning("Wrong seller code from a chat (%d recent tries)", len(tries) + 1)
+        await update.effective_chat.send_message(f"Wrong seller code. {MAX_TRIES - len(tries) - 1} tries left before a 10-minute lock.")
         return
+    FAILED_TRIES.pop(chat_id, None)
     store.set_seller(chat_id)
     log.info("Seller chat registered")
     if TWO_BOTS:
-        await update.message.reply_text("🧑‍💼 Seller mode on.\n" + SELLER_HELP, parse_mode=HTML)
+        await update.effective_chat.send_message("🧑‍💼 Seller mode on. (I deleted your message so the code isn't left in the chat.)\n\n" + SELLER_HELP, parse_mode=HTML)
         return
     store.remove_shopper(chat_id)  # single bot: the seller's chat is not a customer, so no customer offers here
-    await update.message.reply_text(
+    await update.effective_chat.send_message(
         "🧑‍💼 Seller mode on. This chat now only gets seller cards, not customer offers.\n"
         "/campaigns · /pending · /live · /stats · /audit · /customer &lt;name or id&gt;\n\n"
         "<i>To see the customer side, open the bot from another Telegram account or ask a classmate to /start it.</i>", parse_mode=HTML)
+
+
+async def logout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    store.remove_seller(update.effective_chat.id)
+    await update.message.reply_text("🔒 Logged out of seller mode. Send /seller <code> to come back.")
 
 
 async def _seller_only(update: Update) -> bool:
@@ -397,7 +421,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await q.edit_message_reply_markup(None)
         await q.message.reply_text("No problem, maybe later. 🙂")
         return
-    if update.effective_chat.id != store.get_seller():
+    if not store.is_seller_chat(update.effective_chat.id):
         await q.answer("Seller only", show_alert=True)
         return
     if o["status"] != "pending":
@@ -461,7 +485,7 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 SHOPPER_COMMANDS = [("start", start), ("profile", profile), ("offer", offer), ("offers", offers)]
-SELLER_COMMANDS = [("seller", seller), ("campaigns", campaigns), ("pending", pending), ("live", live),
+SELLER_COMMANDS = [("seller", seller), ("logout", logout), ("campaigns", campaigns), ("pending", pending), ("live", live),
                    ("stats", stats), ("audit", audit), ("customer", customer)]
 
 
@@ -469,7 +493,7 @@ SHOPPER_MENU = [BotCommand("start", "Start shopping"), BotCommand("offer", "My p
                 BotCommand("offers", "Today's deals"), BotCommand("profile", "My orders and points"), BotCommand("help", "Help")]
 SELLER_MENU = [BotCommand("campaigns", "Propose offers"), BotCommand("pending", "Offers waiting for you"), BotCommand("live", "Live offers"),
                BotCommand("stats", "Results"), BotCommand("audit", "What the rules changed"), BotCommand("customer", "Offer for one customer"),
-               BotCommand("seller", "Unlock seller mode"), BotCommand("help", "Help")]
+               BotCommand("seller", "Unlock seller mode"), BotCommand("logout", "Leave seller mode"), BotCommand("help", "Help")]
 
 
 def _app(token: str, commands: list, fallback, menu: list | None = None) -> Application:
@@ -581,6 +605,11 @@ async def run_seller_action(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await customer_report(update, args.get("query", ""))
     elif tool == "draft_offer":
         await draft_from_chat(update, args)
+    elif tool == "draft_group_offer":
+        f = {k: args.get(k) for k in ("segments", "cities", "categories", "first_time_only", "with_cart")}
+        o, sel = recommender.group_offer(DATA, SEGS, rules(), f, args.get("product_ids"), args.get("discount_pct", 0), args.get("valid_days", 7),
+                                         args.get("title", ""), args.get("message", ""), args.get("rationale", ""), "seller_chat")
+        await _pipeline_reply(update, o)
     elif tool == "run_campaigns":
         await campaigns(update, context)
     elif tool == "show_stats":
@@ -617,6 +646,11 @@ async def draft_from_chat(update: Update, a: dict) -> None:
     days = max(1, min(int(a.get("valid_days", 7)), 60))
     cand = recommender._offer(kind, a.get("title", "Special offer"), a.get("message", ""), target, pids, int(a.get("discount_pct", 0)),
                               days, a.get("rationale", "Requested by the seller."), "Seller-requested offer", source="seller_chat")
+    await _pipeline_reply(update, cand)
+
+
+async def _pipeline_reply(update: Update, cand: dict) -> None:
+    """Rule-check a chat draft and answer with its card, the lowered discount, or the reasons it was blocked."""
     res = recommender.run_pipeline(DATA, rules(), [cand])
     if res["skipped"]:
         await update.message.reply_text("An offer with that name for that audience is already waiting or live. /pending or /live.")
@@ -634,7 +668,7 @@ async def draft_from_chat(update: Update, a: dict) -> None:
 
 async def confirm_button(update: Update, act: str, token: str) -> None:
     q = update.callback_query
-    if update.effective_chat.id != store.get_seller():
+    if not store.is_seller_chat(update.effective_chat.id):
         await q.answer("Seller only", show_alert=True)
         return
     await q.answer()
