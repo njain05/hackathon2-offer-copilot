@@ -4,17 +4,29 @@
     {
       "name": "dashboard",
       "runtimeExecutable": ".venv/bin/python",
-      "runtimeArgs": ["-m", "src.api"],
+      "runtimeArgs": [
+        "-m",
+        "src.api"
+      ],
       "port": 8000
     },
     {
       "name": "dashboard-preview",
       "runtimeExecutable": "/usr/bin/env",
-      "runtimeArgs": ["SELLER_CODE=preview-only-code", "TELEGRAM_BOT_TOKEN=", "SELLER_BOT_TOKEN=",
-                      "OFFER_STATE_FILE=data/preview_state.json", "OFFER_AUDIT_FILE=data/preview_audit.jsonl",
-                      "OFFER_PUBLIC_FILE=data/preview_offers.json", "OFFER_DASHBOARD_FILE=data/preview_dashboard.json",
-                      ".venv/bin/python", "-m", "src.api"],
-      "port": 8000
+      "runtimeArgs": [
+        "DASHBOARD_PORT=8001",
+        "SELLER_CODE=preview-only-code",
+        "TELEGRAM_BOT_TOKEN=",
+        "SELLER_BOT_TOKEN=",
+        "OFFER_STATE_FILE=data/preview_state.json",
+        "OFFER_AUDIT_FILE=data/preview_audit.jsonl",
+        "OFFER_PUBLIC_FILE=data/preview_offers.json",
+        "OFFER_DASHBOARD_FILE=data/preview_dashboard.json",
+        ".venv/bin/python",
+        "-m",
+        "src.api"
+      ],
+      "port": 8001
     }
   ]
 }

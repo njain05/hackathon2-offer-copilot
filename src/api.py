@@ -259,7 +259,12 @@ def chat_turn(body: dict) -> dict:
         o, sel = recommender.group_offer(DATA, SEGS, load_rules(), f, a.get("product_ids"), a.get("discount_pct", 0), a.get("valid_days", 7),
                                          a.get("title", ""), a.get("message", ""), a.get("rationale", ""), "dashboard")
         if not sel["count"]:
-            return {"text": f"No customers match {sel['label']} right now (after leaving out opted-out and recently-offered customers)."}
+            why = [f"{sel['excluded_cooldown']} already got an offer in the last {load_rules()['global']['cooldown_days_per_customer']} days",
+                   f"{sel['excluded_opt_out']} opted out of marketing"]
+            why = [w for w, n in zip(why, (sel["excluded_cooldown"], sel["excluded_opt_out"])) if n]
+            if sel["matched"]:
+                return {"text": f"{sel['matched']} customer(s) match {sel['label']}, but the rules protect all of them: {'; '.join(why)}."}
+            return {"text": f"No customers match {sel['label']}. Try a wider group or another city."}
         return _pipeline_result(o)
     if tool == "run_campaigns":
         r = load_rules()
