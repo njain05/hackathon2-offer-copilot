@@ -508,9 +508,6 @@ def main() -> None:
         pass
 
 
-if __name__ == "__main__":
-    main()
-
 
 # ---------- seller chat in plain language ----------
 def md_to_html(text: str) -> str:
@@ -628,3 +625,7 @@ async def confirm_button(update: Update, act: str, token: str) -> None:
         return
     store.log_event("rule_change", {"source": "seller_chat", "change": done, "reasons": [done]})
     await q.edit_message_text(q.message.text_html + "\n\n✅ <b>Updated rules.yaml</b>", parse_mode=HTML)
+
+
+if __name__ == "__main__":
+    main()

@@ -276,3 +276,9 @@ def test_welcome_rules():
     regular = bot.DATA["customers"].query("orders_total > 0").customer_id.iloc[0]
     v = validate_offer({**w, "target": regular}, bot.DATA, r, [])
     assert not v.ok and any("only for first orders" in x for x in v.reasons)
+
+
+def test_main_block_is_last():
+    """`python -m src.bot` runs main() at the __main__ line, so every handler must be defined above it."""
+    lines = [l for l in open(bot.__file__, encoding="utf-8").read().splitlines() if l.strip()]
+    assert lines[-2:] == ['if __name__ == "__main__":', "    main()"]
