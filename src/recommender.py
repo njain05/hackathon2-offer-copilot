@@ -1,0 +1,157 @@
+"""Rule-based recommender + AI-assisted flow. Every offer is validated before it is stored or shown."""
+from datetime import timedelta
+
+import pandas as pd
+
+from src import agent, store
+from src.data_loader import TODAY
+from src.rules import validate_offer
+
+
+def _offer(kind, title, message, target, pids, disc, valid_days, rationale, impact, source="rule_engine", code=None):
+    return {
+        "kind": kind, "title": title, "message": message, "target": target,
+        "product_ids": list(pids), "category": None, "discount_pct": int(disc),
+        "code": code or (title.split()[0].upper()[:8] + str(int(disc))),
+        "valid_from": TODAY.isoformat(), "valid_to": (TODAY + timedelta(days=valid_days)).isoformat(),
+        "rationale": rationale, "expected_impact": impact, "source": source,
+    }
+
+
+def _stock_ok(data, rules):
+    p = data["products"]
+    return p[p.stock_units >= rules["global"]["min_stock_for_offer"]]
+
+
+def generate_candidates(data: dict, segs: pd.DataFrame, rules: dict) -> list[dict]:
+    p = _stock_ok(data, rules)
+    counts = segs.segment.value_counts().to_dict()
+    out = []
+    gift = p[p.category.isin(["Gift Box", "Nuts", "Dried Fruit"])].sort_values("margin_pct", ascending=False).head(4)
+    out.append(_offer("public", "Diwali Gifting Sale", "Gift something sweet this Diwali: premium dry fruits and gift boxes, now with a festive saving.",
+                      "ALL", gift.product_id, 10, 17, "Diwali is ~17 days away and over 60% of dry-fruit consumption happens in festive season; gifting items have the best margins to fund a discount.",
+                      "Lift gifting sales while staying above the margin floor"))
+    fast = p[p.category == "Fasting"].sort_values("stock_units", ascending=False).head(3)
+    out.append(_offer("public", "Navratri Leftover Deal", "Fasting essentials still in your kitchen plans? Stock up for Ekadashi and upcoming vrats.",
+                      "ALL", fast.product_id, 10, 7, "Navratri just ended and fasting items are our deepest stock; clear it before demand dips.",
+                      "Convert excess fasting stock into cash"))
+    n = counts.get("at_risk", 0)
+    if n:
+        out.append(_offer("public", "We Miss You Winback", "It's been a while! Here's a little thank-you on our best sellers.",
+                          "at_risk", p[p.category.isin(["Makhana", "Dried Fruit"])].sort_values("stock_units", ascending=False).head(3).product_id,
+                          10, 10, f"{n} customers went quiet 30-60 days after buying regularly: still recoverable with a modest offer.", f"Win back part of {n} at-risk customers"))
+    n = counts.get("lapsed", 0)
+    if n:
+        out.append(_offer("public", "Come Back Special", "We saved something for you: a bigger saving to welcome you back.",
+                          "lapsed", p[p.category.isin(["Seeds", "Snacks", "Mixes"])].head(3).product_id,
+                          15, 10, f"{n} customers have not ordered for over 60 days; a larger offer on high-margin items is justified.", f"Reactivate some of {n} lapsed customers"))
+    return out
+
+
+def run_pipeline(data: dict, rules: dict, candidates: list[dict], history_fn=store.history_for) -> dict:
+    res = {"stored": [], "adjusted": [], "blocked": []}
+    for c in candidates:
+        v = validate_offer(c, data, rules, history_fn(c["target"]) if c["target"].startswith("C0") else [])
+        if v.ok:
+            res["stored"].append(store.add_offer(c))
+        elif v.adjusted_offer:
+            a = {**v.adjusted_offer, "rationale": c["rationale"] + f" (Rules lowered the discount from {c['discount_pct']}% to {v.adjusted_offer['discount_pct']}%.)"}
+            store.log_event("adjusted", {"source": c["source"], "title": c["title"], "proposed": c["discount_pct"], "final": a["discount_pct"], "reasons": v.reasons})
+            res["adjusted"].append(store.add_offer(a))
+        else:
+            store.log_event("blocked", {"source": c["source"], "title": c["title"], "proposed": c["discount_pct"], "reasons": v.reasons})
+            res["blocked"].append(store.add_offer({**c, "status": "blocked", "blocked_reasons": v.reasons}))
+    return res
+
+
+def ai_campaigns(data: dict, segs: pd.DataFrame, rules: dict) -> list[dict] | None:
+    p = _stock_ok(data, rules)
+    ctx = {"today": TODAY.isoformat(), "festivals": {"Navratri": "ended 19 Oct", "Diwali": "8 Nov 2026"},
+           "segment_counts": segs.segment.value_counts().to_dict(),
+           "catalogue": p[["product_id", "product_name", "category", "price", "margin_pct", "stock_units", "festival_tag"]].to_dict("records")}
+    raw = agent.propose_campaigns(ctx, rules)
+    if not raw:
+        return None
+    out = []
+    for r in raw:
+        try:
+            out.append(_offer("public", r["title"], r["message"], r.get("target", "ALL"), r["product_ids"], r["discount_pct"],
+                              int(r.get("valid_days", 7)), r["rationale"], r.get("expected_impact", ""), source="ai_agent"))
+        except Exception:
+            continue
+    return out
+
+
+# ---------- per-customer (customer mode in the bot, seller chat) ----------
+def customer_profile(data: dict, segs: pd.DataFrame, cid: str) -> dict:
+    c = data["customers"].set_index("customer_id").loc[cid]
+    s = segs.set_index("customer_id").loc[cid]
+    return {"customer_id": cid, "segment": s.segment, "segment_reason": s.reason, "orders_total": int(c.orders_total),
+            "lifetime_value": int(c.lifetime_value), "days_since_last_order": None if pd.isna(c.days_since_last_order) else int(c.days_since_last_order),
+            "discount_order_share": float(c.discount_order_share), "return_rate": float(c.return_rate), "tier": c.tier,
+            "reward_points": int(c.reward_points), "points_expiring": int(c.points_expiring), "preferred_category": c.preferred_category,
+            "cart_items": int(c.cart_items), "marketing_opt_in": bool(c.marketing_opt_in)}
+
+
+def _base_candidate(data, rules, prof) -> dict | None:
+    """Rule-based starting offer for a customer; None = no discount needed."""
+    p = _stock_ok(data, rules)
+    seg = prof["segment"]
+    cart = [x for x in data["customers"].set_index("customer_id").loc[prof["customer_id"]].cart_product_ids.split(",") if x]
+    if prof["return_rate"] >= 0.3:
+        return None
+    if cart:
+        pids, disc, title = cart[:3], 8, "Your cart is waiting"
+        why = "Has items in cart; a small nudge is enough to close the sale."
+    elif seg in ("champion", "loyal"):
+        return None
+    elif seg == "at_risk":
+        pids = p[p.category == prof["preferred_category"]].head(2).product_id.tolist(); disc, title = 10, "We saved this for you"
+        why = f"At risk of leaving ({prof['segment_reason']}); offer on their favourite category."
+    elif seg == "lapsed":
+        pids = p[p.category == prof["preferred_category"]].head(2).product_id.tolist(); disc, title = 15, "Come back for more"
+        why = f"Lapsed ({prof['segment_reason']}); a stronger offer is justified."
+    elif seg == "price_sensitive":
+        pids = p[p.category == prof["preferred_category"]].head(2).product_id.tolist(); disc, title = 5, "Little something extra"
+        why = "Buys mostly on discount; keep it small to protect margin."
+    elif seg == "new":
+        pids = p[p.category == prof["preferred_category"]].head(2).product_id.tolist(); disc, title = 10, "Welcome offer"
+        why = "New customer; a welcome offer encourages a second order."
+    else:
+        pids = p[p.category == prof["preferred_category"]].head(1).product_id.tolist(); disc, title = 5, "Just for you"
+        why = "Regular buyer; a light nudge on their favourite category."
+    if not pids:
+        return None
+    return _offer("personal", title, f"{disc}% off on your picks.", prof["customer_id"], pids, disc, 7, why,
+                  "Expected to convert a warm customer without over-discounting", code=f"{prof['customer_id']}-{disc}")
+
+
+def offer_for_customer(data: dict, segs: pd.DataFrame, rules: dict, cid: str, use_ai: bool = True) -> dict:
+    """Return {profile, offer|None, explanation, validation_notes, used_ai}. Never returns an unvalidated offer."""
+    prof = customer_profile(data, segs, cid)
+    base = _base_candidate(data, rules, prof)
+    if base is None:
+        why = ("High return rate: discounts here would likely be returned." if prof["return_rate"] >= 0.3
+               else "This customer buys without needing a discount; keep margin.")
+        return {"profile": prof, "offer": None, "explanation": why, "notes": [], "used_ai": False}
+    used_ai = False
+    cand = dict(base)
+    if use_ai and agent.available():
+        ai = agent.personalise(prof, base, rules)
+        if ai and "discount_pct" in ai:
+            used_ai = True
+            cand.update(discount_pct=int(ai["discount_pct"]), title=ai.get("title", cand["title"]), message=ai.get("message", cand["message"]),
+                        rationale=ai.get("rationale", cand["rationale"]), source="ai_agent")
+            if cand["discount_pct"] <= 0:
+                return {"profile": prof, "offer": None, "explanation": cand["rationale"], "notes": [], "used_ai": True}
+            cand["code"] = f"{cid}-{cand['discount_pct']}"
+    v = validate_offer(cand, data, rules, store.history_for(cid))
+    notes = []
+    if not v.ok and v.adjusted_offer:
+        notes.append(f"Proposed {cand['discount_pct']}%, rules lowered it to {v.adjusted_offer['discount_pct']}%.")
+        store.log_event("adjusted", {"source": cand["source"], "customer": cid, "proposed": cand["discount_pct"], "final": v.adjusted_offer["discount_pct"], "reasons": v.reasons})
+        cand = v.adjusted_offer; cand["code"] = f"{cid}-{cand['discount_pct']}"
+    elif not v.ok:
+        store.log_event("blocked", {"source": cand["source"], "customer": cid, "reasons": v.reasons})
+        return {"profile": prof, "offer": None, "explanation": "Offer blocked by rules: " + "; ".join(v.reasons), "notes": v.reasons, "used_ai": used_ai}
+    return {"profile": prof, "offer": cand, "explanation": cand["rationale"], "notes": notes, "used_ai": used_ai}

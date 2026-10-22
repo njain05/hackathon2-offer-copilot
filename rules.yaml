@@ -1,0 +1,21 @@
+# BUSINESS RULES — edit these numbers; no code change needed.
+# Every offer (rule-based, AI, or typed by the seller) is checked against this file before it is sent.
+
+global:
+  max_discount_pct: 20                  # no offer may exceed this
+  min_margin_pct_after_discount: 15     # after discount, profit margin must stay at or above this
+  cooldown_days_per_customer: 7         # minimum days between personal offers to the same customer
+  max_offers_per_customer_per_month: 3  # frequency cap
+  min_stock_for_offer: 20               # do not promote items with fewer units than this
+  respect_marketing_opt_in: true        # never target customers who opted out
+
+# Tighter caps for low-margin categories (optional; global cap still applies)
+category_caps_pct:
+  Makhana: 15
+  Nuts: 12
+  Fasting: 10
+  Dried Fruit: 15
+  Gift Box: 12
+  Seeds: 20
+  Snacks: 20
+  Mixes: 20

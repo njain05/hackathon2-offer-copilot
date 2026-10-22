@@ -1,0 +1,95 @@
+"""Rules layer: the ONLY place discount limits are enforced. AI output is untrusted; everything passes here."""
+from dataclasses import dataclass, field
+from datetime import date, datetime
+from math import floor
+from pathlib import Path
+
+import yaml
+
+from src.data_loader import ROOT, TODAY
+
+
+@dataclass
+class ValidationResult:
+    ok: bool
+    reasons: list[str] = field(default_factory=list)
+    adjusted_offer: dict | None = None
+
+
+def load_rules(path: str | Path = ROOT / "rules.yaml") -> dict:
+    with open(path, encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def max_discount(product, rules: dict) -> tuple[int, str]:
+    """Highest discount allowed on one product, and which limit binds."""
+    g = rules["global"]
+    limits = [(int(g["max_discount_pct"]), f"global cap of {g['max_discount_pct']}%")]
+    cat = rules.get("category_caps_pct", {}).get(product.category)
+    if cat is not None:
+        limits.append((int(cat), f"{product.category} cap of {cat}%"))
+    floor_pct = g["min_margin_pct_after_discount"]
+    m = floor(100 * (1 - product.cost_price / ((1 - floor_pct / 100) * product.price)))
+    limits.append((max(m, 0), f"margin floor of {floor_pct}%"))
+    return min(limits, key=lambda x: x[0])
+
+
+def _d(s: str) -> date:
+    return datetime.strptime(s, "%Y-%m-%d").date()
+
+
+def validate_offer(offer: dict, data: dict, rules: dict, history: list[dict] | None = None) -> ValidationResult:
+    history = history or []
+    g = rules["global"]
+    disc_reasons, other = [], []
+    d = offer.get("discount_pct", 0) or 0
+    if d <= 0:
+        other.append("Discount must be above 0%")
+
+    products = data["products"].set_index("product_id")
+    pids = offer.get("product_ids") or []
+    if not pids:
+        other.append("Offer has no products")
+    caps = []
+    for pid in pids:
+        if pid not in products.index:
+            other.append(f"Unknown product {pid}")
+            continue
+        p = products.loc[pid]
+        row = type("P", (), {"category": p.category, "cost_price": p.cost_price, "price": p.price})
+        cap, why = max_discount(row, rules)
+        caps.append(cap)
+        if d > cap:
+            disc_reasons.append(f"{p.product_name}: {d}% is above the allowed {cap}% ({why})")
+        if p.stock_units < g["min_stock_for_offer"]:
+            other.append(f"{p.product_name}: only {int(p.stock_units)} in stock (minimum {g['min_stock_for_offer']})")
+
+    try:
+        vf, vt = _d(offer["valid_from"]), _d(offer["valid_to"])
+        if vt < vf:
+            other.append("Offer ends before it starts")
+        if vt < TODAY:
+            other.append("Offer has already expired")
+    except Exception:
+        other.append("Offer dates are missing or invalid")
+
+    target = offer.get("target", "")
+    customers = data["customers"].set_index("customer_id")
+    if target in customers.index:
+        if g.get("respect_marketing_opt_in", True) and not bool(customers.loc[target, "marketing_opt_in"]):
+            other.append("Customer has opted out of marketing")
+        mine = [h for h in history if h.get("target") == target and h.get("status") in ("approved", "sent")]
+        dates = sorted(_d(h["created_at"][:10]) for h in mine if h.get("created_at"))
+        if dates and (TODAY - dates[-1]).days < g["cooldown_days_per_customer"]:
+            other.append(f"Customer got an offer {(TODAY - dates[-1]).days} day(s) ago (cooldown {g['cooldown_days_per_customer']} days)")
+        recent = [x for x in dates if (TODAY - x).days < 30]
+        if len(recent) >= g["max_offers_per_customer_per_month"]:
+            other.append(f"Customer already received {len(recent)} offers this month (cap {g['max_offers_per_customer_per_month']})")
+
+    adjusted = None
+    if disc_reasons and not other and caps:
+        new_d = min(caps)
+        if new_d >= 1:
+            adjusted = {**offer, "discount_pct": new_d}
+    reasons = disc_reasons + other
+    return ValidationResult(ok=not reasons, reasons=reasons, adjusted_offer=adjusted)
