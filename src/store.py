@@ -1,8 +1,11 @@
 """Tiny JSON store: offers, shopper assignments, seller id, audit log, public offers export."""
 import json
 from datetime import datetime
+from functools import lru_cache
 
-from src.data_loader import ROOT
+import pandas as pd
+
+from src.data_loader import DATA_FILE, ROOT
 
 STATE = ROOT / "data" / "state.json"
 AUDIT = ROOT / "data" / "audit.jsonl"
@@ -55,8 +58,22 @@ def set_status(offer_id: str, status: str, blocked_reasons: list[str] | None = N
     return o
 
 
+@lru_cache(maxsize=1)
+def _catalogue() -> dict[str, tuple[str, int]]:
+    p = pd.read_excel(DATA_FILE, sheet_name="products")
+    return {r.product_id: (r.product_name, int(r.price)) for r in p.itertuples()}
+
+
+def for_web(offer: dict) -> dict:
+    """Offer plus the product names and prices the web page shows."""
+    cat = _catalogue()
+    items = [{"name": cat[x][0], "price": cat[x][1]} for x in offer["product_ids"] if x in cat]
+    return {**offer, "products": items}
+
+
 def export_public_offers() -> None:
-    live = [o for o in get_offers("approved") if o["kind"] == "public"]
+    """Write approved public offers (with product names + prices) to web/offers.json."""
+    live = [for_web(o) for o in get_offers("approved") if o["kind"] == "public"]
     PUBLIC.parent.mkdir(exist_ok=True)
     PUBLIC.write_text(json.dumps(live, indent=2, ensure_ascii=False), encoding="utf-8")
 

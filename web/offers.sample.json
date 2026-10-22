@@ -1,0 +1,159 @@
+[
+  {
+    "kind": "public",
+    "title": "Diwali Gifting Sale",
+    "message": "Gift something sweet this Diwali: premium dry fruits and gift boxes, now with a festive saving.",
+    "target": "ALL",
+    "product_ids": [
+      "P011",
+      "P008",
+      "P007",
+      "P010"
+    ],
+    "category": null,
+    "discount_pct": 10,
+    "code": "DIWALI10",
+    "valid_from": "2026-10-22",
+    "valid_to": "2026-11-08",
+    "rationale": "Diwali is ~17 days away and over 60% of dry-fruit consumption happens in festive season; gifting items have the best margins to fund a discount.",
+    "expected_impact": "Lift gifting sales while staying above the margin floor",
+    "source": "rule_engine",
+    "offer_id": "OF-0001",
+    "status": "approved",
+    "blocked_reasons": [],
+    "created_at": "2026-10-22T10:00:00",
+    "decided_at": "2026-10-22T10:05:00",
+    "products": [
+      {
+        "name": "Dry Fruit Gift Box 1kg",
+        "price": 950
+      },
+      {
+        "name": "Raisins Seedless 500g",
+        "price": 170
+      },
+      {
+        "name": "Walnut Kernels 250g",
+        "price": 320
+      },
+      {
+        "name": "Dates Medjool 500g",
+        "price": 450
+      }
+    ]
+  },
+  {
+    "kind": "public",
+    "title": "Navratri Leftover Deal",
+    "message": "Fasting essentials still in your kitchen plans? Stock up for Ekadashi and upcoming vrats.",
+    "target": "ALL",
+    "product_ids": [
+      "P013",
+      "P016",
+      "P014"
+    ],
+    "category": null,
+    "discount_pct": 10,
+    "code": "NAVRATRI10",
+    "valid_from": "2026-10-22",
+    "valid_to": "2026-10-29",
+    "rationale": "Navratri just ended and fasting items are our deepest stock; clear it before demand dips.",
+    "expected_impact": "Convert excess fasting stock into cash",
+    "source": "rule_engine",
+    "offer_id": "OF-0002",
+    "status": "approved",
+    "blocked_reasons": [],
+    "created_at": "2026-10-22T10:00:00",
+    "decided_at": "2026-10-22T10:05:00",
+    "products": [
+      {
+        "name": "Sabudana 500g",
+        "price": 75
+      },
+      {
+        "name": "Rock Salt (Sendha) 1kg",
+        "price": 50
+      },
+      {
+        "name": "Kuttu Atta 500g",
+        "price": 80
+      }
+    ]
+  },
+  {
+    "kind": "public",
+    "title": "We Miss You Winback",
+    "message": "It's been a while! Here's a little thank-you on our best sellers.",
+    "target": "at_risk",
+    "product_ids": [
+      "P008",
+      "P001",
+      "P002"
+    ],
+    "category": null,
+    "discount_pct": 10,
+    "code": "WE10",
+    "valid_from": "2026-10-22",
+    "valid_to": "2026-11-01",
+    "rationale": "37 customers went quiet 30-60 days after buying regularly: still recoverable with a modest offer.",
+    "expected_impact": "Win back part of 37 at-risk customers",
+    "source": "rule_engine",
+    "offer_id": "OF-0003",
+    "status": "approved",
+    "blocked_reasons": [],
+    "created_at": "2026-10-22T10:00:00",
+    "decided_at": "2026-10-22T10:05:00",
+    "products": [
+      {
+        "name": "Raisins Seedless 500g",
+        "price": 170
+      },
+      {
+        "name": "Makhana Roasted Plain 250g",
+        "price": 220
+      },
+      {
+        "name": "Makhana Peri-Peri 100g",
+        "price": 120
+      }
+    ]
+  },
+  {
+    "kind": "public",
+    "title": "Come Back Special",
+    "message": "We saved something for you: a bigger saving to welcome you back.",
+    "target": "lapsed",
+    "product_ids": [
+      "P012",
+      "P017",
+      "P018"
+    ],
+    "category": null,
+    "discount_pct": 15,
+    "code": "COME15",
+    "valid_from": "2026-10-22",
+    "valid_to": "2026-11-01",
+    "rationale": "47 customers have not ordered for over 60 days; a larger offer on high-margin items is justified.",
+    "expected_impact": "Reactivate some of 47 lapsed customers",
+    "source": "rule_engine",
+    "offer_id": "OF-0004",
+    "status": "approved",
+    "blocked_reasons": [],
+    "created_at": "2026-10-22T10:00:00",
+    "decided_at": "2026-10-22T10:05:00",
+    "products": [
+      {
+        "name": "Trail Mix Energy 300g",
+        "price": 250
+      },
+      {
+        "name": "Chia Seeds 250g",
+        "price": 160
+      },
+      {
+        "name": "Pumpkin Seeds 250g",
+        "price": 200
+      }
+    ]
+  }
+]

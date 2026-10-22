@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offers · Nishtha's Pantry</title>
+<meta name="description" content="Live offers on dry fruits, nuts and makhana from Nishtha's Pantry.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hind:wght@400;500;600&family=Rozha+One&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --date: #2B1A12;      /* page: the colour of a Medjool date */
+    --date-2: #3D271B;
+    --almond: #F3E3CC;    /* card: blanched almond */
+    --almond-2: #E7D2B3;
+    --kesar: #F2A41C;     /* saffron seal */
+    --diya: #B3261E;      /* Diwali ribbon */
+    --pista: #6E8436;     /* Navratri / pista ribbon */
+    --ink: #2B1A12;
+    --muted: #7A5E4B;
+    --display: "Rozha One", Georgia, serif;
+    --body: "Hind", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; min-height: 100vh;
+    background: var(--date);
+    background-image: radial-gradient(circle at 1px 1px, rgba(243,227,204,.06) 1px, transparent 0);
+    background-size: 18px 18px;
+    color: var(--almond); font: 400 17px/1.55 var(--body);
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 16px 64px; }
+
+  header { max-width: 640px; margin-bottom: 36px; }
+  .brand { font: 600 15px/1 var(--body); color: var(--kesar); letter-spacing: .02em; margin: 0 0 18px; }
+  h1 { font: 400 clamp(40px, 8vw, 68px)/1.02 var(--display); margin: 0 0 14px; color: var(--almond); }
+  .lede { margin: 0; color: var(--almond-2); max-width: 46ch; }
+
+  .grid { display: grid; gap: 22px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); align-items: start; }
+
+  .offer {
+    position: relative; overflow: hidden;
+    background: var(--almond); color: var(--ink);
+    border-radius: 6px 6px 18px 18px;
+    padding: 22px 20px 0;
+  }
+  .ribbon {
+    position: absolute; top: 18px; right: -42px; width: 160px; transform: rotate(38deg);
+    text-align: center; font: 600 13px/1 var(--body); color: #fff; padding: 7px 0; background: var(--diya);
+  }
+  .ribbon.navratri { background: var(--pista); }
+
+  .head { display: flex; gap: 16px; align-items: center; padding-right: 48px; }
+  .seal {
+    flex: none; width: 86px; height: 86px; border-radius: 50%;
+    display: grid; place-content: center; text-align: center;
+    background: var(--kesar); color: var(--date);
+    box-shadow: 0 0 0 4px var(--almond), 0 0 0 6px var(--kesar);
+  }
+  .seal b { font: 400 34px/0.9 var(--display); }
+  .seal span { font: 600 13px/1.1 var(--body); }
+  .offer h2 { font: 400 25px/1.1 var(--display); margin: 0 0 4px; }
+  .who { margin: 0; font-size: 14px; color: var(--muted); }
+  .msg { margin: 16px 0 12px; }
+
+  .items { list-style: none; margin: 0 0 18px; padding: 0; border-top: 1px dashed var(--almond-2); }
+  .items li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px dashed var(--almond-2); font-size: 15px; }
+  .items s { color: var(--muted); margin-right: 6px; }
+  .items strong { font-weight: 600; white-space: nowrap; }
+
+  /* tear-off coupon stub */
+  .stub {
+    position: relative; margin: 0 -20px; padding: 16px 20px 18px;
+    background: var(--almond-2); border-top: 2px dashed var(--muted);
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+  }
+  .stub::before, .stub::after {
+    content: ""; position: absolute; top: -11px; width: 20px; height: 20px; border-radius: 50%; background: var(--date);
+  }
+  .stub::before { left: -10px; } .stub::after { right: -10px; }
+  .code { font: 600 20px/1 var(--body); letter-spacing: .08em; }
+  .copy {
+    font: 600 15px/1 var(--body); color: var(--almond); background: var(--date);
+    border: 0; border-radius: 999px; padding: 11px 18px; cursor: pointer; min-height: 44px;
+  }
+  .copy:hover { background: var(--date-2); }
+  .copy:focus-visible { outline: 3px solid var(--kesar); outline-offset: 2px; }
+  .copy[data-done] { background: var(--pista); }
+  .ends { margin-left: auto; font-size: 14px; color: var(--muted); }
+  .ends.soon { color: var(--diya); font-weight: 600; }
+
+  .state { border: 2px dashed var(--date-2); border-radius: 18px; padding: 40px 24px; max-width: 560px; }
+  .state h2 { font: 400 28px/1.15 var(--display); margin: 0 0 8px; }
+  .state p { margin: 0; color: var(--almond-2); }
+  .state code { color: var(--kesar); }
+  footer { margin-top: 44px; font-size: 14px; color: var(--muted); }
+  footer p { margin: 0; max-width: 60ch; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  @media (max-width: 420px) { .seal { width: 72px; height: 72px; } .seal b { font-size: 28px; } .offer h2 { font-size: 22px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="brand">Nishtha's Pantry</p>
+    <h1>Offers on dry fruits, nuts and makhana</h1>
+    <p class="lede">Copy a code and use it at checkout. Every offer here has been checked against our pricing rules and approved by the shop.</p>
+  </header>
+
+  <main id="offers" class="grid" aria-live="polite"></main>
+
+  <footer><p>A hackathon demo store. All customers and orders are synthetic.</p></footer>
+</div>
+
+<script>
+const AUDIENCE = {
+  ALL: "For everyone",
+  at_risk: "For customers we haven't seen in a while",
+  lapsed: "Welcome-back offer for returning customers",
+  new: "For new customers",
+  price_sensitive: "For deal lovers",
+  loyal: "For our regulars",
+  regular: "For our regulars",
+  champion: "For our favourite customers",
+};
+const rupees = n => "₹" + Math.round(n).toLocaleString("en-IN");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function daysLeft(validTo) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const end = new Date(validTo + "T00:00:00");
+  return Math.round((end - today) / 86400000);
+}
+function endsText(d) {
+  if (d === 0) return "Ends today";
+  if (d === 1) return "Ends tomorrow";
+  return `Ends in ${d} days`;
+}
+function festival(o) {
+  const t = `${o.title} ${o.rationale || ""}`.toLowerCase();
+  if (t.includes("diwali")) return ["Diwali", ""];
+  if (t.includes("navratri")) return ["After Navratri", "navratri"];
+  return null;
+}
+
+function card(o) {
+  const d = daysLeft(o.valid_to);
+  const fest = festival(o);
+  const items = (o.products || []).map(p =>
+    `<li><span>${esc(p.name)}</span><span><s>${rupees(p.price)}</s><strong>${rupees(p.price * (1 - o.discount_pct / 100))}</strong></span></li>`).join("");
+  return `<article class="offer" aria-labelledby="t-${esc(o.offer_id)}">
+    ${fest ? `<div class="ribbon ${fest[1]}">${fest[0]}</div>` : ""}
+    <div class="head">
+      <div class="seal" aria-label="${o.discount_pct} percent off"><b>${o.discount_pct}%</b><span>off</span></div>
+      <div>
+        <h2 id="t-${esc(o.offer_id)}">${esc(o.title)}</h2>
+        <p class="who">${esc(AUDIENCE[o.target] || "Limited offer")}</p>
+      </div>
+    </div>
+    <p class="msg">${esc(o.message)}</p>
+    ${items ? `<ul class="items" aria-label="Products in this offer">${items}</ul>` : ""}
+    <div class="stub">
+      <span class="code" aria-label="Coupon code">${esc(o.code)}</span>
+      <button class="copy" type="button" data-code="${esc(o.code)}">Copy code</button>
+      <span class="ends ${d <= 2 ? "soon" : ""}">${endsText(d)}</span>
+    </div>
+  </article>`;
+}
+
+function showState(title, text) {
+  document.getElementById("offers").innerHTML =
+    `<section class="state"><h2>${title}</h2><p>${text}</p></section>`;
+}
+
+async function copyCode(btn) {
+  const code = btn.dataset.code;
+  try { await navigator.clipboard.writeText(code); }
+  catch {
+    const t = Object.assign(document.createElement("textarea"), { value: code });
+    document.body.append(t); t.select(); document.execCommand("copy"); t.remove();
+  }
+  btn.textContent = "Copied"; btn.dataset.done = "";
+  setTimeout(() => { btn.textContent = "Copy code"; delete btn.dataset.done; }, 1800);
+}
+
+async function load() {
+  const src = new URLSearchParams(location.search).has("sample") ? "offers.sample.json" : "offers.json";
+  let offers;
+  try {
+    const res = await fetch(src, { cache: "no-store" });
+    if (res.status === 404) offers = [];
+    else if (!res.ok) throw new Error(res.status);
+    else offers = await res.json();
+  } catch {
+    showState("Offers couldn't load",
+      "Open this page through the local server: run <code>python -m http.server -d web 8000</code> and visit <code>localhost:8000/offers.html</code>.");
+    return;
+  }
+  const live = offers.filter(o => o.status === "approved" && o.kind === "public" && daysLeft(o.valid_to) >= 0)
+                     .sort((a, b) => b.discount_pct - a.discount_pct);
+  if (!live.length) {
+    showState("No offers live right now", "New deals appear here as soon as the shop approves them. Check back soon, especially before Diwali.");
+    return;
+  }
+  document.getElementById("offers").innerHTML = live.map(card).join("");
+}
+document.getElementById("offers").addEventListener("click", e => { const b = e.target.closest(".copy"); if (b) copyCode(b); });
+load();
+setInterval(load, 60000); // pick up newly approved offers without a manual refresh
+</script>
+</body>
+</html>

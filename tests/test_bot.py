@@ -137,3 +137,14 @@ def test_reject():
 def test_build_app_registers_handlers():
     app = bot.build_app("123456:TEST-token-not-real")
     assert sum(len(h) for h in app.handlers.values()) >= 14
+
+
+def test_export_includes_product_names_and_prices():
+    seller = msg_update(222)
+    run(bot.seller(seller, ctx("secret")))
+    run(bot.campaigns(seller, ctx()))
+    o = next(x for x in store.get_offers("pending") if x["target"] == "ALL")
+    run(bot.button(press(222, f"allow:{o['offer_id']}"), ctx()))
+    [pub] = json.loads(store.PUBLIC.read_text())
+    assert len(pub["products"]) == len(o["product_ids"])
+    assert all(p["name"] and p["price"] > 0 for p in pub["products"])

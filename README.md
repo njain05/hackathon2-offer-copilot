@@ -20,3 +20,12 @@ Seller-side personalised offer engine with a Telegram bot. See CLAUDE.md and doc
 Allow re-checks the offer against the current `rules.yaml`, publishes it to `web/offers.json` and sends it to every classmate whose shopper it targets.
 
 Note: `python demo.py` resets `data/state.json` (offers, shopper assignments, seller) — don't run it while the bot is live.
+
+## Offers page
+
+`web/offers.html` is the public storefront page. It shows every offer the seller has approved (from `web/offers.json`, written by the bot on Allow), with product prices before and after the discount, a copyable code and a countdown. It refreshes itself every minute.
+
+```bash
+python -m http.server -d web 8000
+```
+Open http://localhost:8000/offers.html. Before anything is approved, open http://localhost:8000/offers.html?sample to see it with example offers (`web/offers.sample.json`).

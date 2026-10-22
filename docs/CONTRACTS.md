@@ -70,7 +70,7 @@ validate_offer(offer: dict, data: dict, rules: dict, history: list[dict]) -> Val
 add_offer(offer) -> offer_id         # assigns offer_id, created_at
 get_offers(status=None) -> list[dict]
 set_status(offer_id, status, blocked_reasons=None) -> dict
-export_public_offers() -> None       # writes web/offers.json with approved public offers
+export_public_offers() -> None       # writes web/offers.json with approved public offers (+ products: [{name, price}] for the page)
 history_for(customer_id) -> list[dict]   # approved/sent personal offers (for cooldown)
 log_event(kind, payload) -> None     # audit log incl. AI proposals blocked/adjusted (data/audit.jsonl)
 ```

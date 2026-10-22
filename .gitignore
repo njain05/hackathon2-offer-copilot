@@ -6,3 +6,4 @@ data/state.json
 .pytest_cache/
 data/audit.jsonl
 .DS_Store
+web/offers.json
