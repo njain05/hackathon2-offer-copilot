@@ -85,7 +85,7 @@ def audience_chats(offer: dict) -> list[int]:
     for chat_id, cid in shoppers.items():
         if (int(chat_id) == seller and not TWO_BOTS) or not bool(opted.get(cid, False)):
             continue
-        if offer["target"] in ("ALL", cid) or seg.get(cid) == offer["target"]:
+        if offer["target"] in ("ALL", cid) or seg.get(cid) == offer["target"] or cid in (offer.get("customer_ids") or []):
             out.append(int(chat_id))
     return out
 
@@ -102,6 +102,15 @@ def no_offer_message(profile: dict) -> str:
         lines = ["No personal discount today."]
     lines.append("\nSee deals for everyone with /offers.")
     return "\n".join(lines)
+
+
+def approval_history(o: dict) -> list[dict]:
+    """History the rules need when (re)checking an offer before it goes live."""
+    if o["kind"] == "personal":
+        return store.history_for(o["target"])
+    if o["target"] == "GROUP":
+        return [h for h in store.group_history() if h["offer_id"] != o["offer_id"]]
+    return []
 
 
 def decision_keyboard(offer_id: str) -> InlineKeyboardMarkup:
@@ -401,8 +410,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     if act != "allow":
         return
-    hist = store.history_for(o["target"]) if o["kind"] == "personal" else []
-    v = validate_offer(o, DATA, rules(), hist)  # rules may have changed since the card was made
+    v = validate_offer(o, DATA, rules(), approval_history(o))  # rules may have changed since the card was made
     if not v.ok:
         store.set_status(oid, "blocked", v.reasons)
         store.log_event("blocked", {"source": o["source"], "title": o["title"], "proposed": o["discount_pct"], "reasons": v.reasons})

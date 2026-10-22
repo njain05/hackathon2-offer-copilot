@@ -4,7 +4,9 @@ Reads the store's data export (synthetic for now), the offers in data/state.json
 The bot rebuilds the file whenever offers change, so the page stays current.
 """
 import json
+import os
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 import pandas as pd
 
@@ -13,7 +15,7 @@ from src.data_loader import ROOT, TODAY, load_all
 from src.rules import load_rules
 from src.segments import SEGMENTS, segment_customers
 
-OUT = ROOT / "web" / "dashboard.json"
+OUT = Path(os.getenv("OFFER_DASHBOARD_FILE", ROOT / "web" / "dashboard.json"))
 STORE_NAME = "Nishtha's Pantry"
 DIWALI = date(2026, 11, 8)
 FESTIVALS = [("Rakhi", "2026-08-20", "2026-08-28"), ("Navratri", "2026-10-11", "2026-10-19")]
@@ -135,9 +137,10 @@ def offer_rows(offers: list[dict]) -> list[dict]:
     for o in sorted(keep, key=lambda x: x.get("created_at", ""), reverse=True)[:30]:
         live = o["status"] == "approved" and o["valid_to"] >= TODAY.isoformat()
         rows.append({"offer_id": o["offer_id"], "title": o["title"], "kind": o["kind"],
-                     "audience": TARGET_NAMES.get(o["target"], o["target"]), "discount_pct": o["discount_pct"],
+                     "audience": o.get("audience_label") or TARGET_NAMES.get(o["target"], o["target"]), "discount_pct": o["discount_pct"],
+                     "group_size": len(o.get("customer_ids") or []) or None,
                      "status": "live" if live else ("expired" if o["status"] == "approved" else o["status"]),
-                     "source": {"rule_engine": "Rule engine", "ai_agent": "AI agent", "seller_chat": "Seller chat"}.get(o["source"], o["source"]),
+                     "source": {"rule_engine": "Rule engine", "ai_agent": "AI agent", "seller_chat": "Seller chat", "dashboard": "Dashboard"}.get(o["source"], o["source"]),
                      "valid_to": o["valid_to"], "used": bool(o.get("used")), "reason": (o.get("blocked_reasons") or [""])[0]})
     return rows
 
@@ -146,7 +149,7 @@ def audit_rows(audit: list[dict]) -> list[dict]:
     rows = []
     for e in reversed(audit[-12:]):
         rows.append({"at": e.get("at", ""), "kind": e.get("kind"), "what": e.get("title") or e.get("customer") or e.get("change", ""),
-                     "source": {"rule_engine": "Rule engine", "ai_agent": "AI agent", "seller_chat": "Seller chat"}.get(e.get("source"), e.get("source", "")),
+                     "source": {"rule_engine": "Rule engine", "ai_agent": "AI agent", "seller_chat": "Seller chat", "dashboard": "Dashboard"}.get(e.get("source"), e.get("source", "")),
                      "proposed": e.get("proposed"), "final": e.get("final"), "reason": (e.get("reasons") or [""])[0]})
     return rows
 

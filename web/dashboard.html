@@ -122,6 +122,50 @@
   .empty { color: var(--muted); font-size: 14.5px; margin: 4px 0 10px; }
   .state { background: var(--card); border-radius: 16px; padding: 28px; }
 
+  /* workspace: forms and actions */
+  .mode-note { background: var(--card); border-radius: 12px; padding: 10px 16px; margin-bottom: 16px; font-size: 14.5px; color: var(--muted); }
+  .work-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .field { margin: 0 0 14px; }
+  .field > label, .field > .lab { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+  .hint { color: var(--muted); font-size: 13px; font-weight: 400; }
+  input[type=text], input[type=number], input[type=password], textarea, input[type=search] {
+    font: inherit; color: var(--ink); background: var(--canvas); border: 1px solid var(--hair); border-radius: 10px; padding: 9px 11px; width: 100%; }
+  textarea { min-height: 70px; resize: vertical; }
+  input:focus, textarea:focus { outline: 2px solid var(--series); outline-offset: 0; border-color: transparent; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button, .seg button { font: inherit; font-size: 14px; border: 1px solid var(--hair); background: var(--canvas); color: var(--ink);
+    border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+  .chips button[aria-pressed="true"], .seg button[aria-pressed="true"] { background: var(--series); border-color: var(--series); color: #fff; }
+  .seg { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+  .checks { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14.5px; margin-top: 8px; }
+  .checks input { accent-color: var(--series); }
+  .prod-group { margin-bottom: 8px; } .prod-group .hint { display: block; margin-bottom: 4px; }
+  .btn { font: 600 15px/1 var(--body); border-radius: 10px; padding: 11px 16px; cursor: pointer; border: 1px solid var(--hair); background: var(--card); color: var(--ink); }
+  .btn.primary { background: var(--series); border-color: var(--series); color: #fff; }
+  .btn.small { font-size: 13.5px; padding: 7px 11px; }
+  .btn.danger { color: var(--blocked); }
+  .btn:disabled { opacity: .55; cursor: progress; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  .count { font-size: 14.5px; padding: 10px 12px; border-radius: 10px; background: var(--canvas); }
+  .count b { font-size: 17px; }
+  .result { border-radius: 12px; padding: 12px 14px; background: var(--canvas); font-size: 14.5px; margin-top: 12px; }
+  .result.ok { border-left: 4px solid var(--live); } .result.warn { border-left: 4px solid var(--pending); } .result.bad { border-left: 4px solid var(--blocked); }
+  .result ul { margin: 6px 0 0; padding-left: 18px; }
+  .preview { white-space: pre-wrap; background: var(--card); border: 1px dashed var(--hair); border-radius: 10px; padding: 10px 12px; margin-top: 8px; font-size: 14px; }
+  .matches { list-style: none; padding: 0; margin: 8px 0 0; } .matches li { padding: 6px 0; border-bottom: 1px solid var(--hair); }
+  .matches button { font: inherit; background: none; border: 0; color: var(--series); cursor: pointer; padding: 0; text-decoration: underline; }
+  .profile { font-size: 14.5px; } .profile dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0; }
+  .profile dt { color: var(--muted); } .profile dd { margin: 0; }
+  .toast { position: fixed; right: 16px; bottom: 16px; background: var(--ink); color: var(--card); padding: 12px 16px; border-radius: 12px;
+           font-size: 14.5px; max-width: 360px; z-index: 20; opacity: 0; transform: translateY(8px); transition: opacity .15s, transform .15s; }
+  .toast.on { opacity: 1; transform: none; }
+  .rules div.r { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 10px; }
+  .rules .edit { display: flex; align-items: center; gap: 6px; } .rules .edit input { width: 72px; padding: 5px 8px; text-align: right; }
+  .rules .edit .hint { width: 34px; }
+  .rules .pending { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; justify-content: flex-end; font-size: 13.5px; }
+  .gate { max-width: 420px; }
+
   @media (max-width: 960px) {
     .shell { grid-template-columns: 1fr; }
     aside { position: sticky; height: auto; padding: 12px 16px; gap: 8px; z-index: 5; flex-direction: column; }
@@ -130,11 +174,11 @@
     aside nav a { white-space: nowrap; border-left: 0; border-bottom: 3px solid transparent; border-radius: 6px 6px 0 0; padding: 6px 10px; }
     aside nav a.on { border-bottom-color: var(--accent); }
     main { padding: 20px 16px 48px; }
-    .cols { grid-template-columns: 1fr; }
+    .cols, .work-grid, .row2 { grid-template-columns: 1fr; }
     .insight { grid-template-columns: 1fr; }
     .strip div { border-right: 0; border-bottom: 1px solid var(--hair); }
   }
-  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .tip { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .tip, .toast { transition: none; } }
 </style>
 </head>
 <body>
@@ -142,14 +186,15 @@
   <aside>
     <div><p class="brand">Offer Copilot</p><p class="client">for Nishtha's Pantry</p></div>
     <nav aria-label="Sections">
-      <a href="#overview" class="on">Overview</a><a href="#sales">Sales</a><a href="#customers">Customers</a>
+      <a href="#overview" class="on">Overview</a><a href="#create">Create offer</a><a href="#find">Find a customer</a><a href="#sales">Sales</a><a href="#customers">Customers</a>
       <a href="#products">Products</a><a href="#offers">Offers</a><a href="#guardrails">Guardrails</a><a href="#rules">Rules</a>
     </nav>
     <div class="side-foot"><p>Store data: synthetic export.</p><p><a href="offers.html">Open the store's offers page</a></p></div>
   </aside>
-  <main id="app" aria-live="polite"></main>
+  <main id="app"><div id="top"></div><div id="work"></div><div id="report"></div></main>
 </div>
 <div class="tip" id="tip" role="status"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -330,15 +375,16 @@ function render(d) {
   if (!d.offers.length) offerBody = el("p", { class: "empty" }, "No offers yet. Send /campaigns in the seller bot, or ask it for one.");
   else {
     const t = el("table");
-    t.append(el("thead", {}, el("tr", {}, ...["Offer", "For", "Off", "Status", "Proposed by", "Ends"].map((h, i) => el("th", i === 2 ? { class: "num" } : {}, h)))));
+    t.append(el("thead", {}, el("tr", {}, ...["Offer", "For", "Off", "Status", "Proposed by", "Ends", ...(LIVE ? [""] : [])].map((h, i) => el("th", i === 2 ? { class: "num" } : {}, h)))));
     t.append(el("tbody", {}, ...d.offers.map(o => el("tr", {},
       el("td", {}, o.title, o.status === "blocked" && o.reason ? el("span", { class: "note" }, o.reason) : "", o.used ? el("span", { class: "note" }, "🛒 used by the customer") : ""),
-      el("td", {}, o.audience), el("td", { class: "num" }, `${o.discount_pct}%`),
+      el("td", {}, o.audience, o.group_size ? el("span", { class: "note" }, `${o.group_size} customers`) : ""), el("td", { class: "num" }, `${o.discount_pct}%`),
       el("td", {}, el("span", { class: `chip ${o.status}` }, ICON[o.status] || o.status)),
-      el("td", {}, o.source), el("td", {}, fmtDate(o.valid_to))))));
+      el("td", {}, o.source), el("td", {}, fmtDate(o.valid_to)),
+      ...(LIVE ? [el("td", {}, offerActions(o))] : [])))));
     offerBody = el("div", { class: "scroll" }, t);
   }
-  const offers = block("offers", "Offers", "Everything the rule engine, the AI agent and the seller proposed, newest first. Nothing goes live without the seller's Allow.", panel("", "", offerBody));
+  const offers = block("offers", "Offers", LIVE ? "Everything the rule engine, the AI agent and you proposed, newest first. Approve re-checks the rules, then sends it to the customers' Telegram." : "Everything the rule engine, the AI agent and the seller proposed, newest first. Nothing goes live without the seller's Allow.", panel("", "", offerBody));
 
   // guardrails
   const guard = block("guardrails", "Guardrails", "Offers the rules lowered or stopped, and rule changes made from the seller bot.",
@@ -349,19 +395,69 @@ function render(d) {
 
   // rules
   const r = d.rules;
-  const rules = block("rules", "Rules in force", "From rules.yaml. To change one, tell the seller bot, e.g. “raise the Makhana limit to 18%”. It shows the change and waits for Confirm.",
-    el("div", { class: "rules" }, ...[
-      ["Highest discount on any offer", `${r.global.max_discount_pct}%`],
-      ["Lowest margin after discount", `${r.global.min_margin_pct_after_discount}%`],
-      ["Days between offers to one customer", r.global.cooldown_days_per_customer],
-      ["Offers per customer per month", r.global.max_offers_per_customer_per_month],
-      ["Minimum stock to promote", `${r.global.min_stock_for_offer} units`],
-      ["Respect marketing opt-out", r.global.respect_marketing_opt_in ? "Yes" : "No"],
-      ...Object.entries(r.category_caps_pct || {}).map(([c, v]) => [`${c}: max discount`, `${v}%`]),
-      ...(r.first_order ? [["Welcome offer, first order", `${r.first_order.welcome_discount_pct}%`], ["Welcome offer minimum basket", inr(r.first_order.min_order_value)]] : []),
-    ].map(([a, b]) => el("div", {}, el("span", {}, a), el("b", {}, b)))));
+  const ruleRows = [ // label, value, unit, rule key, category
+    ["Highest discount on any offer", r.global.max_discount_pct, "%", "max_discount_pct"],
+    ["Lowest margin after discount", r.global.min_margin_pct_after_discount, "%", "min_margin_pct_after_discount"],
+    ["Days between offers to one customer", r.global.cooldown_days_per_customer, "days", "cooldown_days_per_customer"],
+    ["Offers per customer per month", r.global.max_offers_per_customer_per_month, "", "max_offers_per_customer_per_month"],
+    ["Minimum stock to promote", r.global.min_stock_for_offer, "units", "min_stock_for_offer"],
+    ["Respect marketing opt-out", r.global.respect_marketing_opt_in ? "Yes" : "No", "", null],
+    ...Object.entries(r.category_caps_pct || {}).map(([c, v]) => [`${c}: max discount`, v, "%", "category_cap", c]),
+    ...(r.first_order ? [["Welcome offer, first order", r.first_order.welcome_discount_pct, "%", "welcome_discount_pct"],
+                         ["Welcome offer minimum basket (₹)", r.first_order.min_order_value, "", "min_order_value"]] : []),
+  ];
+  const rules = block("rules", "Rules in force", LIVE ? "From rules.yaml. Change a number and press Save: you'll see the change in words and confirm it. Unsafe values are refused." : "From rules.yaml. To change one, tell the seller bot, e.g. “raise the Makhana limit to 18%”. It shows the change and waits for Confirm.",
+    el("div", { class: "rules" }, ...ruleRows.map(row => ruleRow(...row))));
 
-  $("#app").replaceChildren(head, brief, strip, sales, customers, products, offers, guard, rules);
+  $("#top").replaceChildren(...(LIVE ? [] : [el("p", { class: "mode-note" }, "Read-only view. To create and approve offers here, start the dashboard server: python -m src.api")]), head, brief, strip);
+  $("#report").replaceChildren(sales, customers, products, offers, guard, rules);
+}
+
+function ruleRow(labelText, value, unit, key, category) {
+  const shown = typeof value === "number" ? `${unit === "%" ? value + "%" : value + (unit ? " " + unit : "")}` : value;
+  const row = el("div", { class: "r" }, el("span", {}, labelText));
+  if (!LIVE || !key) { row.append(el("b", {}, shown)); return row; }
+  const input = el("input", { type: "number", value, min: 0, "aria-label": labelText });
+  const save = el("button", { class: "btn small", type: "button" }, "Save");
+  row.append(el("span", { class: "edit" }, input, unit ? el("span", { class: "hint" }, unit) : "", save));
+  save.addEventListener("click", async () => {
+    if (Number(input.value) === Number(value)) return toast("No change.");
+    row.querySelector(".pending")?.remove();
+    try {
+      const p = await post("/api/rules", { rule: key, category: category || "", value: Number(input.value) });
+      const box = el("span", { class: "pending" }, p.preview);
+      const ok = el("button", { class: "btn small primary", type: "button" }, "Confirm"), no = el("button", { class: "btn small", type: "button" }, "Cancel");
+      box.append(ok, no); row.append(box); EDITING = true;
+      no.addEventListener("click", () => { box.remove(); input.value = value; EDITING = false; });
+      ok.addEventListener("click", async () => {
+        try { const done = await post("/api/rules", { rule: key, category: category || "", value: Number(input.value), confirm: true });
+              toast(`✅ Updated rules.yaml: ${done.preview}`); EDITING = false; refresh(); }
+        catch (e) { toast(`🛡 ${e.message}`); }
+      });
+    } catch (e) { toast(`🛡 Can't change that: ${e.message}`); input.value = value; }
+  });
+  return row;
+}
+
+function offerActions(o) {
+  const box = el("div", { class: "actions" });
+  const act = (label, action, cls = "") => {
+    const b = el("button", { class: `btn small ${cls}`, type: "button" }, label);
+    b.addEventListener("click", async () => {
+      b.disabled = true;
+      try {
+        const r = await post(`/api/offers/${o.offer_id}/${action}`, {});
+        const s = r.offer.status;
+        toast(s === "approved" ? `✅ Live · sent to ${r.sent} customer chat${r.sent === 1 ? "" : "s"} on Telegram`
+            : s === "blocked" ? `🛡 Blocked by the rules: ${r.offer.blocked_reasons[0]}` : s === "rejected" ? "✖ Rejected" : "⏹ Ended");
+        refresh();
+      } catch (e) { toast(`⚠ ${e.message}`); b.disabled = false; }
+    });
+    return b;
+  };
+  if (o.status === "pending") box.append(act("Approve", "approve", "primary"), act("Reject", "reject"));
+  if (o.status === "live") box.append(act("End", "end", "danger"));
+  return box;
 }
 
 // highlight the section in view
@@ -374,21 +470,224 @@ function trackSections() {
   addEventListener("scroll", () => { if (scrollY < 120) links.forEach(a => a.classList.toggle("on", a.getAttribute("href") === "#overview")); }, { passive: true });
 }
 
+// ---------- server mode: the dashboard can act (python -m src.api) ----------
+let LIVE = false, EDITING = false, OPTS = null;
+const getCode = () => { try { return localStorage.getItem("oc_code") || ""; } catch { return ""; } };
+const setCode = c => { try { localStorage.setItem("oc_code", c); } catch {} };
+async function call(method, path, body) {
+  const res = await fetch(path, { method, cache: "no-store", headers: { "Content-Type": "application/json", "X-Seller-Code": getCode() }, body: body ? JSON.stringify(body) : undefined });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { const e = new Error(data.error || `Error ${res.status}`); e.status = res.status; throw e; }
+  return data;
+}
+const post = (path, body) => call("POST", path, body);
+let toastTimer;
+function toast(text) { const t = $("#toast"); t.textContent = text; t.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("on"), 4200); }
+
+function showGate(msg) {
+  const input = el("input", { type: "password", autocomplete: "current-password", "aria-label": "Seller code" });
+  const go = el("button", { class: "btn primary", type: "submit" }, "Open dashboard");
+  const form = el("form", { class: "state gate" }, el("h1", {}, "Offer Copilot"), el("p", {}, msg),
+    el("div", { class: "field" }, el("label", {}, "Seller code"), input), go);
+  form.addEventListener("submit", e => { e.preventDefault(); setCode(input.value.trim()); load(true); });
+  $("#top").replaceChildren(form); $("#work").replaceChildren(); $("#report").replaceChildren();
+  input.focus();
+}
+
 async function load(first) {
   try {
+    const d = await call("GET", "/api/dashboard");
+    LIVE = true;
+    if (first || !OPTS) { OPTS = await call("GET", "/api/options"); renderWorkspace(); }
+    const y = scrollY; render(d); if (first) trackSections(); else scrollTo(0, y);
+    return;
+  } catch (e) {
+    if (e.status === 401) return showGate(getCode() ? "That code didn't work. Try again." : "Enter the seller code from .env to see and run the dashboard.");
+    if (!first) return; // keep the last good view
+  }
+  try { // no server: read-only from the exported file
     const res = await fetch("dashboard.json", { cache: "no-store" });
     if (!res.ok) throw new Error(res.status);
-    const y = scrollY;
-    render(await res.json());
-    if (first) trackSections(); else scrollTo(0, y);
+    LIVE = false; render(await res.json()); trackSections();
   } catch {
-    if (!first) return; // keep the last good view
-    $("#app").replaceChildren(el("div", { class: "state" }, el("h1", {}, "No dashboard data yet"),
-      el("p", {}, "Start the bot (it builds the data), or run python -m src.dashboard. Open this page through python -m http.server -d web 8000.")));
+    $("#top").replaceChildren(el("div", { class: "state" }, el("h1", {}, "No dashboard data yet"),
+      el("p", {}, "Start the dashboard server with python -m src.api, then open http://localhost:8000/dashboard.html")));
   }
 }
+const refresh = () => load(false);
+
+// ---------- workspace: create an offer, find a customer ----------
+function chipGroup(items, selected, onChange) {
+  const box = el("div", { class: "chips" });
+  for (const it of items) {
+    const b = el("button", { type: "button", "aria-pressed": String(selected.includes(it.value)) }, it.label);
+    b.addEventListener("click", () => {
+      const on = b.getAttribute("aria-pressed") !== "true"; b.setAttribute("aria-pressed", String(on));
+      const i = selected.indexOf(it.value); on ? selected.push(it.value) : selected.splice(i, 1); onChange();
+    });
+    box.append(b);
+  }
+  return box;
+}
+
+function renderWorkspace() {
+  const o = OPTS;
+  const draft = { audience_mode: "group", filters: { segments: [], cities: [], categories: [], first_time_only: false, with_cart: false },
+                  product_ids: [], discount_pct: 10, valid_days: 7, title: "", message: "" };
+  const form = el("div", { class: "panel" });
+  const count = el("div", { class: "count", "aria-live": "polite" }, "Pick who should get it.");
+  const result = el("div");
+  let countTimer;
+  const updateCount = () => {
+    clearTimeout(countTimer);
+    if (draft.audience_mode === "everyone") { count.replaceChildren("Public deal: shown on the store's offers page and sent to every opted-in shopper on the bot."); return; }
+    countTimer = setTimeout(async () => {
+      try {
+        const a = await post("/api/audience", { filters: draft.filters });
+        const left = [a.excluded_opt_out && `${a.excluded_opt_out} opted out`, a.excluded_cooldown && `${a.excluded_cooldown} got an offer recently`].filter(Boolean);
+        count.replaceChildren(el("b", {}, `${a.count} customers`), ` · ${a.label}`, left.length ? el("span", { class: "note" }, `Left out by the rules: ${left.join(", ")}`) : "",
+          a.sample.length ? el("span", { class: "note" }, `e.g. ${a.sample.join(", ")}`) : "");
+      } catch (e) { count.textContent = e.message; }
+    }, 250);
+  };
+
+  // ask in plain words
+  const askBox = el("textarea", { placeholder: "e.g. 12% off nuts for lapsed customers in Ludhiana and Amritsar for a week", "aria-label": "Describe the offer" });
+  const askBtn = el("button", { class: "btn", type: "button" }, "✨ Fill the form for me");
+  askBtn.addEventListener("click", async () => {
+    if (!askBox.value.trim()) return askBox.focus();
+    askBtn.disabled = true; askBtn.textContent = "Thinking…";
+    try { const f = await post("/api/ask", { text: askBox.value }); Object.assign(draft, f, { filters: { ...draft.filters, ...f.filters } }); paint(); toast("Form filled in. Check it, then press Check against rules."); }
+    catch (e) { toast(`⚠ ${e.message}`); }
+    askBtn.disabled = false; askBtn.textContent = "✨ Fill the form for me";
+  });
+
+  const paint = () => {
+    const f = draft.filters;
+    const modeSeg = el("div", { class: "seg" }, ...[["group", "A group of customers"], ["everyone", "Everyone (public deal)"]].map(([v, l]) => {
+      const b = el("button", { type: "button", "aria-pressed": String(draft.audience_mode === v) }, l);
+      b.addEventListener("click", () => { draft.audience_mode = v; paint(); }); return b; }));
+    const groupBits = draft.audience_mode === "group" ? [
+      el("div", { class: "field" }, el("span", { class: "lab" }, "Customer group ", el("span", { class: "hint" }, "(none = any)")),
+        chipGroup(o.segments.map(s => ({ value: s.key, label: s.label })), f.segments, updateCount)),
+      el("div", { class: "field" }, el("span", { class: "lab" }, "City ", el("span", { class: "hint" }, "(none = all cities)")),
+        chipGroup(o.cities.map(c => ({ value: c, label: c })), f.cities, updateCount)),
+      el("div", { class: "field" }, el("span", { class: "lab" }, "Favourite category ", el("span", { class: "hint" }, "(none = any)")),
+        chipGroup(o.categories.map(c => ({ value: c, label: c })), f.categories, updateCount)),
+      (() => { const a = el("input", { type: "checkbox", id: "ft" }), b = el("input", { type: "checkbox", id: "wc" });
+        a.checked = f.first_time_only; b.checked = f.with_cart;
+        a.addEventListener("change", () => { f.first_time_only = a.checked; updateCount(); }); b.addEventListener("change", () => { f.with_cart = b.checked; updateCount(); });
+        return el("div", { class: "checks" }, el("label", {}, a, " First-time customers only"), el("label", {}, b, " Has items in cart")); })(),
+    ] : [];
+    const byCat = {}; o.products.forEach(p => (byCat[p.category] ||= []).push(p));
+    const prodBox = el("div", {}, ...Object.entries(byCat).map(([cat, ps]) => el("div", { class: "prod-group" }, el("span", { class: "hint" }, cat),
+      chipGroup(ps.map(p => ({ value: p.product_id, label: `${p.product_name} · ₹${p.price}` })), draft.product_ids, () => {}))));
+    const num = (k, attrs) => { const i = el("input", { type: "number", value: draft[k], ...attrs }); i.addEventListener("input", () => (draft[k] = Number(i.value))); return i; };
+    const txt = (k, tag, attrs) => { const i = el(tag, { ...attrs }); i.value = draft[k] || ""; i.addEventListener("input", () => (draft[k] = i.value)); return i; };
+    const title = txt("title", "input", { type: "text", id: "f-title", placeholder: "e.g. Diwali nuts for you", maxlength: 60 });
+    const message = txt("message", "textarea", { id: "f-msg", placeholder: "What the customer reads (max ~35 words)" });
+    const writeBtn = el("button", { class: "btn small", type: "button" }, "✍️ Write it with AI");
+    writeBtn.addEventListener("click", async () => {
+      writeBtn.disabled = true;
+      try { const w = await post("/api/write", draft); draft.title = w.title; draft.message = w.message; title.value = w.title; message.value = w.message; }
+      catch (e) { toast(`⚠ ${e.message}`); }
+      writeBtn.disabled = false;
+    });
+    const checkBtn = el("button", { class: "btn", type: "button" }, "Check against rules");
+    const createBtn = el("button", { class: "btn primary", type: "button" }, "Create offer");
+    checkBtn.addEventListener("click", async () => {
+      try { const c = await post("/api/check", draft); showResult(c); } catch (e) { toast(`⚠ ${e.message}`); }
+    });
+    createBtn.addEventListener("click", async () => {
+      if (!draft.product_ids.length) return toast("Pick at least one product.");
+      createBtn.disabled = true;
+      try {
+        const r = await post("/api/offers", draft);
+        const s = r.offer.status;
+        toast(s === "blocked" ? `🛡 Blocked by the rules: ${r.offer.blocked_reasons[0]}` :
+              r.adjusted ? `⚖️ Created at ${r.offer.discount_pct}% (the rules lowered it). Approve it in Offers below.` : "Created. Approve it in Offers below.");
+        result.replaceChildren(); refresh();
+      } catch (e) { toast(`⚠ ${e.message}`); }
+      createBtn.disabled = false;
+    });
+    form.replaceChildren(
+      el("h3", {}, "New offer"), el("p", { class: "sub" }, "Nothing reaches customers until you approve it in Offers. The rules check it twice: now and on approve."),
+      el("div", { class: "field" }, el("span", { class: "lab" }, "Who gets it"), modeSeg), ...groupBits, count,
+      el("div", { class: "field", style: "margin-top:14px" }, el("span", { class: "lab" }, "Products"), prodBox),
+      el("div", { class: "row2" }, el("div", { class: "field" }, el("label", { for: "f-disc" }, "Discount %"), num("discount_pct", { id: "f-disc", min: 1, max: 90 })),
+                                   el("div", { class: "field" }, el("label", { for: "f-days" }, "Runs for (days)"), num("valid_days", { id: "f-days", min: 1, max: 60 }))),
+      el("div", { class: "field" }, el("label", { for: "f-title" }, "Title"), title), el("div", { class: "field" }, el("label", { for: "f-msg" }, "Message"), message, el("div", { class: "actions", style: "margin-top:6px" }, writeBtn)),
+      el("div", { class: "actions" }, checkBtn, createBtn), result);
+    updateCount();
+  };
+  const showResult = c => {
+    const cls = c.ok ? "ok" : c.adjusted_discount ? "warn" : "bad";
+    const head = c.ok ? "✅ Within the rules." : c.adjusted_discount ? `⚖️ Allowed at ${c.adjusted_discount}%: it will be lowered to that.` : "🛡 The rules would block this:";
+    result.replaceChildren(el("div", { class: `result ${cls}` }, el("b", {}, head),
+      c.reasons.length ? el("ul", {}, ...c.reasons.map(r => el("li", {}, r))) : "",
+      el("div", { class: "hint", style: "margin-top:8px" }, "What the customer will see:"), el("div", { class: "preview" }, c.preview)));
+  };
+
+  const ai = o.ai ? "" : el("p", { class: "hint" }, "AI is off (no ANTHROPIC_API_KEY): fill the form by hand.");
+  const create = el("section", { class: "block", id: "create" }, el("h2", {}, "Create an offer"),
+    el("p", { class: "sub" }, "Describe it in plain words, or build it yourself: pick who, what and how much."),
+    el("div", { class: "work-grid" }, form,
+      el("div", { class: "panel" }, el("h3", {}, "Describe it"), el("p", { class: "sub" }, "Claude fills in the form; you check it before anything is created."),
+        askBox, el("div", { class: "actions", style: "margin-top:8px" }, askBtn), ai)));
+
+  // find a customer
+  const q = el("input", { type: "search", placeholder: "Name or id, e.g. Harpreet or C0042", "aria-label": "Find a customer" });
+  const out = el("div");
+  const findForm = el("form", { class: "actions" }, q, el("button", { class: "btn", type: "submit" }, "Find"));
+  const showCustomer = async query => {
+    try {
+      const r = await call("GET", `/api/customer?q=${encodeURIComponent(query)}`);
+      if (r.matches.length) {
+        out.replaceChildren(el("p", { class: "hint" }, "Several customers match:"), el("ul", { class: "matches" }, ...r.matches.map(m => {
+          const b = el("button", { type: "button" }, `${m.name} · ${m.city} · ${m.customer_id}`); b.addEventListener("click", () => showCustomer(m.customer_id));
+          return el("li", {}, b); })));
+        return;
+      }
+      if (!r.customer) { out.replaceChildren(el("p", { class: "empty" }, "No customer found.")); return; }
+      const c = r.customer;
+      const suggest = el("button", { class: "btn primary", type: "button" }, "Suggest an offer for them");
+      const slot = el("div");
+      suggest.addEventListener("click", async () => {
+        suggest.disabled = true; suggest.textContent = "Deciding…";
+        try {
+          const s = await post(`/api/customers/${c.customer_id}/suggest`, {});
+          if (!s.offer) { slot.replaceChildren(el("div", { class: "result ok" }, el("b", {}, "No discount for this customer."), el("div", {}, s.explanation))); }
+          else {
+            const o2 = s.offer;
+            slot.replaceChildren(el("div", { class: "result ok" }, el("b", {}, `${o2.discount_pct}% off: ${o2.title}`), el("div", {}, s.explanation),
+              ...(s.notes || []).map(n => el("div", { class: "hint" }, "⚖️ " + n)),
+              el("div", { class: "preview" }, o2.message), el("div", { class: "actions", style: "margin-top:8px" }, offerActions({ ...o2, status: "pending" }))));
+          }
+          refresh();
+        } catch (e) { toast(`⚠ ${e.message}`); }
+        suggest.disabled = false; suggest.textContent = "Suggest an offer for them";
+      });
+      const days = c.days_since_last_order == null ? "never ordered" : `${c.days_since_last_order} days ago`;
+      out.replaceChildren(el("div", { class: "profile" }, el("h3", {}, `${c.name} · ${c.city}`),
+        el("dl", {}, el("dt", {}, "Group"), el("dd", {}, c.segment_label), el("dt", {}, "Orders"), el("dd", {}, `${c.orders_total} · ${inr(c.lifetime_value)} spent`),
+          el("dt", {}, "Last order"), el("dd", {}, days), el("dt", {}, "Uses discounts"), el("dd", {}, `${Math.round(c.discount_order_share * 100)}% of orders`),
+          el("dt", {}, "Cart"), el("dd", {}, c.cart_items ? `${c.cart_items} item(s)` : "empty"), el("dt", {}, "Points"), el("dd", {}, `${c.reward_points}${c.points_expiring ? ` · ${c.points_expiring} expiring` : ""}`),
+          el("dt", {}, "Marketing"), el("dd", {}, c.marketing_opt_in ? "opted in" : "opted out: no offers"),
+          el("dt", {}, "On the bot"), el("dd", {}, c.on_bot ? "yes, a classmate is playing them" : "not yet: approved offers are saved, not sent")),
+        c.marketing_opt_in ? suggest : "", slot));
+    } catch (e) { toast(`⚠ ${e.message}`); }
+  };
+  findForm.addEventListener("submit", e => { e.preventDefault(); if (q.value.trim()) showCustomer(q.value.trim()); });
+  const find = el("section", { class: "block", id: "find" }, el("h2", {}, "Find a customer"),
+    el("p", { class: "sub" }, "See one customer's profile and give them a personal offer. The engine decides how much (or no discount at all)."),
+    el("div", { class: "panel" }, findForm, out));
+
+  $("#work").replaceChildren(create, find);
+  paint();
+}
+
 load(true);
-setInterval(() => load(false), 60000);
+setInterval(() => { if (!EDITING) refresh(); }, 60000);
 </script>
 </body>
 </html>

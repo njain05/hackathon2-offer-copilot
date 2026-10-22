@@ -20,9 +20,10 @@ def _margin_after(data, offer):
 
 
 def seller_card(offer: dict, data: dict) -> str:
-    tag = {"rule_engine": "Rule engine", "ai_agent": "AI agent", "seller_chat": "You"}.get(offer["source"], offer["source"])
+    tag = {"rule_engine": "Rule engine", "ai_agent": "AI agent", "seller_chat": "You", "dashboard": "Dashboard"}.get(offer["source"], offer["source"])
     return (f"💡 <b>{escape(offer['title'])}</b>  <i>({tag})</i>\n\n"
-            f"🎯 <b>Who:</b> {escape(offer['target'])}\n"
+            f"🎯 <b>Who:</b> {escape(offer.get('audience_label') or offer['target'])}"
+            + (f" ({len(offer['customer_ids'])} customers)" if offer.get("customer_ids") else "") + "\n"
             f"🛍 <b>What:</b> {escape(_names(data, offer['product_ids']))}\n"
             f"🏷 <b>{offer['discount_pct']}% off</b> · code <code>{escape(offer['code'])}</code>\n"
             + (f"🧺 Minimum order ₹{offer['min_order_value']} (welcome offer, once per customer)\n" if offer.get("min_order_value") else "")

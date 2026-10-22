@@ -1,4 +1,5 @@
 """Rule-based recommender + AI-assisted flow. Every offer is validated before it is stored or shown."""
+import re
 from datetime import timedelta
 
 import pandas as pd
@@ -8,11 +9,20 @@ from src.data_loader import TODAY
 from src.rules import validate_offer
 
 
+FILLER = {"OFF", "THE", "FOR", "AND", "YOUR", "OUR", "ON", "A", "AN", "WE", "TO", "OF", "GET", "NEW"}
+
+
+def _code_word(title: str) -> str:
+    """First real word of the title for a coupon code: '15% off nuts' -> NUTS, 'Diwali Gifting Sale' -> DIWALI."""
+    words = [w.upper() for w in re.findall(r"[A-Za-z]+", title)]
+    return next((w for w in words if w not in FILLER), words[0] if words else "OFFER")[:8]
+
+
 def _offer(kind, title, message, target, pids, disc, valid_days, rationale, impact, source="rule_engine", code=None):
     return {
         "kind": kind, "title": title, "message": message, "target": target,
         "product_ids": list(pids), "category": None, "discount_pct": int(disc),
-        "code": code or (title.split()[0].upper()[:8] + str(int(disc))),
+        "code": code or (_code_word(title) + str(int(disc))),
         "valid_from": TODAY.isoformat(), "valid_to": (TODAY + timedelta(days=valid_days)).isoformat(),
         "rationale": rationale, "expected_impact": impact, "source": source,
     }
@@ -62,17 +72,26 @@ def _recode(code: str, old: int, new: int) -> str:
     return code[: -len(str(old))] + str(new) if code.endswith(str(old)) else code
 
 
+def with_discount(offer: dict, new: int) -> dict:
+    """Offer at a new discount, with "15%" in its title and message changed to match (customers must see the real number)."""
+    old = int(offer["discount_pct"])
+    fix = lambda t: re.sub(rf"(?<!\d){old}\s?%", f"{new}%", t or "")
+    return {**offer, "discount_pct": int(new), "title": fix(offer.get("title")), "message": fix(offer.get("message")),
+            "code": _recode(offer.get("code", ""), old, int(new))}
+
+
 def run_pipeline(data: dict, rules: dict, candidates: list[dict], history_fn=store.history_for) -> dict:
     res = {"stored": [], "adjusted": [], "blocked": [], "skipped": []}
     for c in candidates:
         if _same_offer_active(c):
             res["skipped"].append(c["title"])
             continue
-        v = validate_offer(c, data, rules, history_fn(c["target"]) if c["target"].startswith("C0") else [])
+        hist = history_fn(c["target"]) if c["target"].startswith("C0") else store.group_history() if c["target"] == "GROUP" else []
+        v = validate_offer(c, data, rules, hist)
         if v.ok:
             res["stored"].append(store.add_offer(c))
         elif v.adjusted_offer:
-            a = {**v.adjusted_offer, "code": _recode(c["code"], c["discount_pct"], v.adjusted_offer["discount_pct"]), "rationale": c["rationale"] + f" (Rules lowered the discount from {c['discount_pct']}% to {v.adjusted_offer['discount_pct']}%.)"}
+            a = {**with_discount(c, v.adjusted_offer["discount_pct"]), "rationale": c["rationale"] + f" (Rules lowered the discount from {c['discount_pct']}% to {v.adjusted_offer['discount_pct']}%.)"}
             store.log_event("adjusted", {"source": c["source"], "title": c["title"], "proposed": c["discount_pct"], "final": a["discount_pct"], "reasons": v.reasons})
             res["adjusted"].append(store.add_offer(a))
         else:
@@ -191,7 +210,7 @@ def offer_for_customer(data: dict, segs: pd.DataFrame, rules: dict, cid: str, us
     if not v.ok and v.adjusted_offer:
         notes.append(f"Proposed {cand['discount_pct']}%, rules lowered it to {v.adjusted_offer['discount_pct']}%.")
         store.log_event("adjusted", {"source": cand["source"], "customer": cid, "proposed": cand["discount_pct"], "final": v.adjusted_offer["discount_pct"], "reasons": v.reasons})
-        cand = v.adjusted_offer
+        cand = with_discount(cand, v.adjusted_offer["discount_pct"])
         cand["code"] = f"WELCOME{cand['discount_pct']}-{cid}" if cand.get("is_welcome") else f"{cid}-{cand['discount_pct']}"
     elif not v.ok:
         store.log_event("blocked", {"source": cand["source"], "customer": cid, "reasons": v.reasons})

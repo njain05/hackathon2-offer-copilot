@@ -1,15 +1,18 @@
 """Tiny JSON store: offers, shopper assignments, seller id, audit log, public offers export."""
 import json
+import os
 from datetime import datetime
+from pathlib import Path
 from functools import lru_cache
 
 import pandas as pd
 
 from src.data_loader import DATA_FILE, ROOT
 
-STATE = ROOT / "data" / "state.json"
-AUDIT = ROOT / "data" / "audit.jsonl"
-PUBLIC = ROOT / "web" / "offers.json"
+# Paths can be overridden (e.g. a preview server that must not touch the live bot's data).
+STATE = Path(os.getenv("OFFER_STATE_FILE", ROOT / "data" / "state.json"))
+AUDIT = Path(os.getenv("OFFER_AUDIT_FILE", ROOT / "data" / "audit.jsonl"))
+PUBLIC = Path(os.getenv("OFFER_PUBLIC_FILE", ROOT / "web" / "offers.json"))
 
 
 def _load() -> dict:
@@ -96,7 +99,14 @@ def export_public_offers() -> None:
 
 
 def history_for(customer_id: str) -> list[dict]:
-    return [o for o in get_offers() if o["target"] == customer_id and o["status"] in ("approved", "sent")]
+    """Approved/sent offers that reached this customer: personal ones and group offers they were in."""
+    return [o for o in get_offers() if o["status"] in ("approved", "sent")
+            and (o["target"] == customer_id or customer_id in (o.get("customer_ids") or []))]
+
+
+def group_history() -> list[dict]:
+    """Every approved/sent offer that went to specific customers (for checking a group offer's cooldowns)."""
+    return [o for o in get_offers() if o["status"] in ("approved", "sent") and (o["target"].startswith("C0") or o.get("customer_ids"))]
 
 
 def log_event(kind: str, payload: dict) -> None:

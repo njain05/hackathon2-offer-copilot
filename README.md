@@ -41,6 +41,17 @@ Open http://localhost:8000/offers.html. Before anything is approved, open http:/
 
 ## Dashboard (for the sales and marketing team)
 
-`web/dashboard.html` is Offer Copilot's analytics view: revenue and orders, customers going quiet and the spend at stake, open carts, the festival effect (Navratri, Rakhi, Diwali countdown), customer groups and what the engine does for each, category stock cover and discount limits, every offer and its status, the guardrail log, and the rules in force.
+```bash
+.venv/bin/python -m src.api
+```
+Open http://localhost:8000/dashboard.html and enter your `SELLER_CODE`. The same server also serves the store's offers page at /offers.html.
 
-The bot rebuilds `web/dashboard.json` whenever an offer or rule changes; `python -m src.dashboard` builds it by hand. Open http://localhost:8000/dashboard.html with the same `python -m http.server -d web 8000`.
+What the team can see: revenue and orders, customers going quiet and the spend at stake, open carts, the festival effect (Navratri, Rakhi, Diwali countdown), customer groups and what the engine does for each, category stock cover and discount limits, every offer and its status, the guardrail log, and the rules in force.
+
+What the team can do:
+- **Create an offer**: pick who (customer group, city, favourite category, first-time customers, open carts; the matching count updates live, with opted-out and recently-offered customers left out by the rules), products, discount and days. Or describe it in plain words ("12% off nuts for lapsed customers in Ludhiana") and Claude fills the form. **Check against rules** shows what would pass, be lowered or be blocked, and exactly what the customer will read.
+- **Find a customer**: profile plus a suggested personal offer (or "no discount", e.g. for top customers).
+- **Approve / Reject / End** offers. Approve re-checks the rules, then sends the offer through the customer bot to the customers it targets (group offers only reach their group).
+- **Edit the rules**: change a number, press Save, read the change in words, Confirm. Unsafe values are refused.
+
+Without the server (`python -m http.server -d web 8000`) the dashboard is read-only from `web/dashboard.json`, which the bot keeps up to date.

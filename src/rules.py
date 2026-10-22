@@ -59,6 +59,29 @@ def _check_welcome(offer, d, customers, history, rules, disc_reasons, other) -> 
         other.append(f"Welcome offer must require a basket of at least ₹{fo['min_order_value']}")
 
 
+def _check_group(offer, customers, history, g, other) -> None:
+    """Group offer (picked on the dashboard): every listed customer must exist, be opted in and be out of cooldown."""
+    ids = offer.get("customer_ids") or []
+    if not ids:
+        other.append("No customers in this group")
+        return
+    unknown = [c for c in ids if c not in customers.index]
+    if unknown:
+        other.append(f"{len(unknown)} unknown customer id(s) in the group")
+    known = [c for c in ids if c in customers.index]
+    if g.get("respect_marketing_opt_in", True):
+        out = [c for c in known if not bool(customers.loc[c, "marketing_opt_in"])]
+        if out:
+            other.append(f"{len(out)} customer(s) in the group opted out of marketing")
+    cool = g["cooldown_days_per_customer"]
+    recent = {c for h in history if h.get("status") in ("approved", "sent") and h.get("created_at")
+              and (TODAY - _d(h["created_at"][:10])).days < cool
+              for c in ([h["target"]] if h.get("target") in customers.index else h.get("customer_ids") or [])}
+    hit = [c for c in known if c in recent]
+    if hit:
+        other.append(f"{len(hit)} customer(s) in the group got an offer in the last {cool} days")
+
+
 def validate_offer(offer: dict, data: dict, rules: dict, history: list[dict] | None = None) -> ValidationResult:
     history = history or []
     g = rules["global"]
@@ -109,6 +132,8 @@ def validate_offer(offer: dict, data: dict, rules: dict, history: list[dict] | N
 
     if offer.get("is_welcome"):
         _check_welcome(offer, d, customers, history, rules, disc_reasons, other)
+    if offer.get("target") == "GROUP":
+        _check_group(offer, customers, history, g, other)
 
     adjusted = None
     if offer.get("is_welcome") and rules.get("first_order"):
