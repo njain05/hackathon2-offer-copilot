@@ -505,7 +505,9 @@ let LIVE = false, EDITING = false, OPTS = null;
 const getCode = () => { try { return localStorage.getItem("oc_code") || ""; } catch { return ""; } };
 const setCode = c => { try { localStorage.setItem("oc_code", c); } catch {} };
 async function call(method, path, body) {
-  const res = await fetch(path, { method, cache: "no-store", headers: { "Content-Type": "application/json", "X-Seller-Code": getCode() }, body: body ? JSON.stringify(body) : undefined });
+  let res;
+  try { res = await fetch(path, { method, cache: "no-store", headers: { "Content-Type": "application/json", "X-Seller-Code": getCode() }, body: body ? JSON.stringify(body) : undefined }); }
+  catch { const e = new Error(`Can't reach the dashboard server at ${location.host}. Is "python -m src.api" still running? Restart it and reload this page.`); e.status = 0; throw e; }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) { const e = new Error(data.error || `Error ${res.status}`); e.status = res.status; throw e; }
   return data;
