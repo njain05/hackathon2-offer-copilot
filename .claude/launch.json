@@ -3,12 +3,14 @@
   "configurations": [
     {
       "name": "dashboard",
-      "runtimeExecutable": ".venv/bin/python",
+      "runtimeExecutable": "/usr/bin/env",
       "runtimeArgs": [
+        "DASHBOARD_PORT=8080",
+        ".venv/bin/python",
         "-m",
         "src.api"
       ],
-      "port": 8000
+      "port": 8080
     },
     {
       "name": "dashboard-preview",

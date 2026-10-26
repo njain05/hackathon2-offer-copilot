@@ -57,3 +57,13 @@ What the team can do:
 - **Edit the rules**: change a number, press Save, read the change in words, Confirm. Unsafe values are refused.
 
 Without the server (`python -m http.server -d web 8000`) the dashboard is read-only from `web/dashboard.json`, which the bot keeps up to date.
+
+## Deploy (always on)
+
+One container runs the dashboard and both bots: `python -m src.serve` (see `Dockerfile`). It listens on `$PORT` and serves `/dashboard.html`, `/offers.html` and `/healthz`.
+
+**Render (free):** New → Web Service → connect this GitHub repo → Runtime: Docker → Instance: Free. Under **Environment** add `TELEGRAM_BOT_TOKEN`, `SELLER_BOT_TOKEN`, `SELLER_CODE`, `ANTHROPIC_API_KEY` (never commit them). Free services sleep after 15 minutes without visits, so add a free **UptimeRobot** HTTP monitor on `https://<your-app>.onrender.com/healthz` every 5 minutes.
+
+**Important:** Telegram allows only one running copy of a bot. Stop the laptop bots (`Ctrl+C`) once the hosted copy is up, or set `RUN_BOTS=0` on the host to put only the dashboard online while the bots keep running on your laptop.
+
+Free hosts have no permanent disk: offers made while hosted reset when the service restarts (the synthetic store data is in the image). For permanent storage, mount a disk and point `OFFER_STATE_FILE`, `OFFER_AUDIT_FILE`, `OFFER_PUBLIC_FILE` and `OFFER_DASHBOARD_FILE` at it.

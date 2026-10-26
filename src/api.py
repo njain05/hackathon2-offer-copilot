@@ -382,6 +382,9 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         url = urlparse(self.path)
+        if url.path == "/healthz":  # for uptime monitors; no data, no code needed
+            self._json(HTTPStatus.OK, {"ok": True})
+            return
         m = re.match(r"^/api/offers/(OF-\d+)/customers$", url.path)
         if m:
             self._run(lambda: offer_customers(m.group(1)))
@@ -412,7 +415,8 @@ class Handler(SimpleHTTPRequestHandler):
 
 def serve(port: int | None = None) -> ThreadingHTTPServer:
     port = int(os.getenv("DASHBOARD_PORT", "8000")) if port is None else port
-    return ThreadingHTTPServer(("127.0.0.1", port), partial(Handler, directory=str(WEB)))
+    host = os.getenv("DASHBOARD_HOST", "127.0.0.1")  # 0.0.0.0 when hosted (src.serve sets it)
+    return ThreadingHTTPServer((host, port), partial(Handler, directory=str(WEB)))
 
 
 def main() -> None:

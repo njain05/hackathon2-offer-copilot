@@ -183,3 +183,13 @@ def test_top_n_group_offer_and_customer_lists(monkeypatch):
                     "product_ids": ["P011"], "discount_pct": 10, "valid_days": 14, "title": "Diwali thank you", "message": "x"})["offer"]
     listed = api.offer_customers(o["offer_id"])
     assert len(listed["customers"]) == 10 and [c["customer_id"] for c in listed["customers"]][0] in o["customer_ids"]
+
+
+def test_healthz_needs_no_code():
+    httpd = api.serve(port=0)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        r = urllib.request.urlopen(f"http://127.0.0.1:{httpd.server_port}/healthz")
+        assert json.loads(r.read()) == {"ok": True}
+    finally:
+        httpd.shutdown()

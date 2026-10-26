@@ -1,0 +1,12 @@
+.env
+.venv/
+.git/
+__pycache__/
+.pytest_cache/
+data/state.json
+data/audit.jsonl
+data/demo_*
+data/preview_*
+web/offers.json
+web/dashboard.json
+Project_Summary.pdf
