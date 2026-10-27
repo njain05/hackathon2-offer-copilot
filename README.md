@@ -18,6 +18,92 @@ Suggested 3-minute tour:
 2. [Seller bot](https://t.me/offerengineseller_bot): `/start`, copy the `/seller …` line and send it, then `/campaigns` → press **✅ Allow** on a card for everyone: the offer arrives in the customer bot.
 3. In the seller bot, type *"Make a Diwali deal: 25% off almonds for everyone"*: the rules lower it to the Nuts cap (12%) and say why. `/audit` shows every offer the rules lowered or blocked.
 
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph DATA["Store data (synthetic export)"]
+    X["dryfruit_synthetic_data.xlsx<br/>customers · orders · order items<br/>browsing and cart events · products"]
+  end
+
+  subgraph ENGINE["Analytics and decisions (Python)"]
+    L["data_loader<br/>loads the export"]
+    S["segments<br/>7 customer groups + a reason each"]
+    A["audience<br/>groups by city, category, cart,<br/>first-time, top N"]
+    R["recommender<br/>rule-based campaigns and<br/>personal offers"]
+    AI["agent: Claude<br/>proposes campaigns,<br/>personalises offers"]
+    C["chat: Claude with tools<br/>plain-language requests"]
+    V{{"rules.validate_offer<br/>checks EVERY offer<br/>against rules.yaml"}}
+  end
+
+  subgraph STATE["Saved state"]
+    ST[("state.json<br/>offers · shoppers · sellers")]
+    AU[("audit.jsonl<br/>what the rules lowered or blocked")]
+    RY["rules.yaml<br/>limits marketing can edit"]
+  end
+
+  subgraph PEOPLE["Who uses it"]
+    SB["Seller bot<br/>@offerengineseller_bot"]
+    DB["Dashboard<br/>api.py + dashboard.html"]
+    CB["Customer bot<br/>@perofferengine_Bot"]
+    OP["Offers page<br/>offers.html"]
+  end
+
+  X --> L --> S --> R
+  S --> A --> R
+  R --> AI --> V
+  R --> V
+  SB -- "typed requests" --> C
+  DB -- "Ask Copilot / forms" --> C
+  C --> V
+  RY --> V
+  V -- "ok or lowered to the limit" --> ST
+  V -- "blocked + reasons" --> AU
+  ST -- "pending cards" --> SB
+  ST -- "Offers table" --> DB
+  SB -- "Allow (re-checked)" --> V
+  DB -- "Approve (re-checked)" --> V
+  ST -- "approved offers" --> CB
+  ST -- "approved public deals" --> OP
+  SB -. "rule change + Confirm" .-> RY
+  DB -. "rule change + Confirm" .-> RY
+```
+
+### The life of one offer
+
+1. **Proposed** by the rule engine, by Claude, or by the seller (typed in a bot, asked in the dashboard chat, or built in the Create-an-offer form).
+2. **Checked by `rules.validate_offer`** against `rules.yaml`: overall and category discount limits, minimum margin after discount for every product, minimum stock, marketing opt-out, cooldown and monthly cap per customer, first-order rules, dates. Result: **ok**, **lowered** to the highest allowed discount (the title, message and code are rewritten to the real number), or **blocked** with plain-English reasons. Lowered and blocked offers are written to the guardrail log.
+3. **Pending**: shown to the seller as a card (seller bot) or a row (dashboard) with Allow / Reject.
+4. **Allow / Approve**: checked **again** against the current rules (they may have changed), then **live**.
+5. **Delivered** by the customer bot to every shopper it targets (everyone, a customer group, a hand-picked group, or one customer). Public deals also appear on the offers page.
+6. **Used**: the shopper taps *Use this offer*; results show in `/stats`, `/audit` and the dashboard.
+
+### Where the guardrails are
+
+- **One place decides**: only `src/rules.py` enforces limits; no other module hardcodes a discount limit.
+- **AI output is untrusted**: Claude's replies are structured (JSON schema) and every proposal still goes through the rules. Claude never publishes anything.
+- **The seller has the final say**: nothing reaches customers without Allow / Approve; rule changes and taking an offer down need Confirm.
+- **Private seller access**: the seller bot and dashboard need `SELLER_CODE`; wrong codes lock a chat for 10 minutes; secrets live only in `.env` (or the host's settings).
+
+### Code map
+
+| File | Job |
+|---|---|
+| `src/data_loader.py` | Loads the store export; `TODAY` for the simulation |
+| `src/segments.py` | Sorts customers into 7 groups with a reason (thresholds at the top of the file) |
+| `src/audience.py` | Picks groups of customers (city, category, cart, first-time, top N), leaving out opted-out and recently-offered ones |
+| `src/recommender.py` | Rule-based campaigns and personal offers; runs every proposal through the rules |
+| `src/agent.py` | Claude: campaign proposals, personal wording, the chat's single call |
+| `src/chat.py` | Tools for plain-language seller requests (bot and dashboard) |
+| `src/rules.py` | `validate_offer` and safe edits to `rules.yaml` |
+| `src/store.py` | Offers, shoppers, sellers (`data/state.json`), guardrail log, offers-page export |
+| `src/messages.py` | Telegram cards and customer messages |
+| `src/bot.py` | Customer bot and seller bot |
+| `src/dashboard.py` / `src/api.py` | Dashboard numbers and the dashboard's server and API |
+| `src/serve.py` | Hosted start: dashboard + both bots in one process |
+| `web/` | `dashboard.html` (sales team) and `offers.html` (store's public deals) |
+| `tests/` | 58 tests: rules, bots, chat, dashboard API |
+
 ## Run the bot
 
 Two Telegram bots, one program: a **customer bot** (classmates use it; this is the username to share and submit) and a **seller bot** (only you). Both read and write the same `data/state.json`, so an offer you Allow in the seller bot is sent to customers by the customer bot.
