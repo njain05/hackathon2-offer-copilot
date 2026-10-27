@@ -197,3 +197,67 @@ def apply_change(key: str, value: int, category: str = "", path: str | Path = RO
     yaml.safe_load(new_text)  # refuse to write a broken file
     Path(path).write_text(new_text, encoding="utf-8")
     return preview
+
+
+# ---------- python -m src.rules --check : read the rules back in plain English ----------
+def explain(rules: dict) -> list[str]:
+    """Every rule, its value and what it means, for a marketing person."""
+    g = rules["global"]
+    lines = [
+        f"Highest discount on any offer: {g['max_discount_pct']}%",
+        f"Lowest profit margin after the discount, on every product: {g['min_margin_pct_after_discount']}%",
+        f"Days between two personal offers to the same customer: {g['cooldown_days_per_customer']}",
+        f"Most personal offers one customer can get in a month: {g['max_offers_per_customer_per_month']}",
+        f"Products need at least {g['min_stock_for_offer']} units in stock to be promoted",
+        "Customers who opted out of marketing never get offers" if g.get("respect_marketing_opt_in", True) else "WARNING: opted-out customers can get offers",
+    ]
+    for cat, cap in (rules.get("category_caps_pct") or {}).items():
+        lines.append(f"{cat}: at most {cap}% off")
+    if fo := rules.get("first_order"):
+        lines.append(f"First-order welcome offer: at most {fo['welcome_discount_pct']}%, on baskets of ₹{fo['min_order_value']} or more, once per customer")
+    return lines
+
+
+def check_file(path: str | Path = ROOT / "rules.yaml") -> list[str]:
+    """Load and sanity-check rules.yaml. Raises ValueError with a plain-English message if it is broken."""
+    try:
+        rules = load_rules(path)
+    except FileNotFoundError:
+        raise ValueError(f"{path} is missing")
+    except yaml.YAMLError as e:
+        mark = getattr(e, "problem_mark", None)
+        where = f" near line {mark.line + 1}" if mark else ""
+        raise ValueError(f"rules.yaml can't be read{where}. Check the spacing (2 spaces before each rule) and that every rule looks like 'name: number'.")
+    if not isinstance(rules, dict) or "global" not in rules:
+        raise ValueError("rules.yaml needs a 'global:' section")
+    need = ["max_discount_pct", "min_margin_pct_after_discount", "cooldown_days_per_customer", "max_offers_per_customer_per_month", "min_stock_for_offer"]
+    missing = [k for k in need if k not in rules["global"]]
+    if missing:
+        raise ValueError(f"rules.yaml is missing: {', '.join(missing)}")
+    problems = []
+    for k in need:
+        v = rules["global"][k]
+        if not isinstance(v, (int, float)) or isinstance(v, bool) or v < 0:
+            problems.append(f"{k} must be a number of 0 or more (it is {v!r})")
+    top = rules["global"].get("max_discount_pct", 0)
+    for cat, cap in (rules.get("category_caps_pct") or {}).items():
+        if not isinstance(cap, (int, float)) or isinstance(cap, bool):
+            problems.append(f"{cat} limit must be a number (it is {cap!r})")
+        elif cap > top:
+            problems.append(f"{cat} limit {cap}% is above the overall limit of {top}% (the overall limit wins)")
+    if problems:
+        raise ValueError("; ".join(problems))
+    return explain(rules)
+
+
+if __name__ == "__main__":
+    import sys
+    target = sys.argv[sys.argv.index("--check") + 1] if "--check" in sys.argv and len(sys.argv) > sys.argv.index("--check") + 1 else ROOT / "rules.yaml"
+    try:
+        lines = check_file(target)
+        print("✅ rules.yaml is valid. Every offer is checked against these rules:\n")
+        for line in lines:
+            print("  •", line)
+    except ValueError as e:
+        print(f"❌ {e}")
+        sys.exit(1)

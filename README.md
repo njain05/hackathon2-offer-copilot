@@ -102,7 +102,20 @@ flowchart LR
 | `src/dashboard.py` / `src/api.py` | Dashboard numbers and the dashboard's server and API |
 | `src/serve.py` | Hosted start: dashboard + both bots in one process |
 | `web/` | `dashboard.html` (sales team) and `offers.html` (store's public deals) |
-| `tests/` | 58 tests: rules, bots, chat, dashboard API |
+| `tests/` | 67 tests: rules, AI fallbacks, bots, chat, dashboard API |
+
+## Rules for the marketing team
+
+All limits live in `rules.yaml`, with a comment on every line; change a number and save, no code needed. Check your edit:
+
+```bash
+.venv/bin/python -m src.rules --check
+```
+It lists every rule in plain English ("Nuts: at most 12% off", "Days between two personal offers to the same customer: 7"), or explains what's wrong ("rules.yaml can't be read near line 15…", "Nuts limit 30% is above the overall limit of 20%"). The rules can also be changed from the seller bot or the dashboard, which show the change in words and wait for Confirm.
+
+## Results
+
+`/stats` in the seller bot and the **Results** strip on the dashboard show how the offers are doing: how many customer chats they reached, how often they were used (use rate), estimated sales from customers who used one and the estimated discount given, how many offers the rules lowered or blocked, and the store's **no-offer baseline** (the share of carts that become an order within 24 hours without any offer) to compare against.
 
 ## Run the bot
 

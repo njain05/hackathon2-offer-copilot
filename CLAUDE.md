@@ -40,7 +40,7 @@ src/bot.py                         customer bot + seller bot (two-bot mode when 
 src/dashboard.py, src/api.py       dashboard numbers; dashboard server + JSON API (X-Seller-Code)
 src/serve.py                       hosted start: dashboard + both bots in one process ($PORT; RUN_BOTS=0 = dashboard only)
 web/dashboard.html, web/offers.html
-tests/                             pytest, one file per area (58 tests)
+tests/                             pytest, one file per area (67 tests)
 render.yaml, Dockerfile            deployment (Render Blueprint, as in hackathon 1)
 docs/                              CONTRACTS, PROGRESS, PROMPTS, Hackathon_2_Brief.pdf
 ```

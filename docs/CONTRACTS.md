@@ -54,6 +54,8 @@ segment_customers(data) -> pd.DataFrame   # customer_id, segment, recency, frequ
  "status": "pending" | "approved" | "rejected" | "blocked" | "ended",   # ended = seller took a live offer down
  "blocked_reasons": [str],              # filled when rules reject
  "created_at": iso timestamp, "decided_at": iso timestamp | None,
+ "sent_to": int (optional),             # customer chats the offer reached
+ "used_by": [customer_id] (optional),   # who tapped "Use this offer"
  "is_welcome": bool (optional),          # first-order welcome offer (personal); checked by rules first_order section
  "min_order_value": int (optional)       # ₹ minimum basket for the offer
 }
@@ -130,3 +132,8 @@ GET /api/dashboard · GET /api/options · GET /api/customer?q= ·
 POST /api/audience · /api/check (dry run) · /api/offers (create, pending) · /api/offers/<id>/approve|reject|end ·
 /api/ask (plain words -> form) · /api/write (AI copy) · /api/customers/<id>/suggest · /api/rules ({rule, value, category, confirm}) · /api/chat ({text, history}) -> {text, offers?, confirm?}
 Approve re-validates; a group offer is only delivered to its customer_ids. Paths override for previews: OFFER_STATE_FILE, OFFER_AUDIT_FILE, OFFER_PUBLIC_FILE, OFFER_DASHBOARD_FILE.
+
+## src/dashboard.py
+```python
+results(data, offers, audit) -> {sent, used, use_rate_pct, est_sales, est_discount, baseline_cart_conversion_pct, guardrail_saves, rule_changes}
+```
