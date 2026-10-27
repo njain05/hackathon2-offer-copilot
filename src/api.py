@@ -351,6 +351,10 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path.startswith("/api/"):
             log.info("%s %s", self.command, self.path.split("?")[0])
 
+    def list_directory(self, path):  # never show a file listing
+        self.send_error(HTTPStatus.NOT_FOUND, "Not found")
+        return None
+
     def end_headers(self):
         if not self.path.startswith("/api/"):
             self.send_header("Cache-Control", "no-cache")  # always serve the latest dashboard page
@@ -385,6 +389,14 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         url = urlparse(self.path)
+        if url.path in ("", "/", "/index.html"):  # the address on its own opens the dashboard
+            self.send_response(HTTPStatus.FOUND)
+            self.send_header("Location", "/dashboard.html")
+            self.end_headers()
+            return
+        if url.path.rstrip("/").endswith("dashboard.json") or url.path.startswith("/data"):
+            self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})  # dashboard data only via the code-protected API
+            return
         if url.path == "/healthz":  # for uptime monitors; no data, no code needed
             self._json(HTTPStatus.OK, {"ok": True})
             return

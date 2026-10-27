@@ -193,3 +193,26 @@ def test_healthz_needs_no_code():
         assert json.loads(r.read()) == {"ok": True}
     finally:
         httpd.shutdown()
+
+
+def test_root_opens_dashboard_and_nothing_leaks_without_the_code():
+    httpd = api.serve(port=0)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_port}"
+
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *a, **k):
+            return None
+    opener = urllib.request.build_opener(NoRedirect)
+    try:
+        with pytest.raises(urllib.error.HTTPError) as e:
+            opener.open(base + "/")
+        assert e.value.code == 302 and e.value.headers["Location"] == "/dashboard.html"
+        for path in ("/dashboard.json", "/data/state.json", "/web/"):
+            with pytest.raises(urllib.error.HTTPError) as e:
+                urllib.request.urlopen(base + path)
+            assert e.value.code == 404, path
+        assert b"Offer Copilot" in urllib.request.urlopen(base + "/dashboard.html").read()
+        assert urllib.request.urlopen(base + "/offers.html").status == 200
+    finally:
+        httpd.shutdown()
