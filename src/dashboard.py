@@ -154,12 +154,33 @@ def audit_rows(audit: list[dict]) -> list[dict]:
     return rows
 
 
+def results(data: dict, offers: list[dict], audit: list[dict]) -> dict:
+    """How the offers are doing: reach, use, estimated sales and discount, against the store's no-offer baseline."""
+    aov = data["customers"].set_index("customer_id").avg_order_value
+    out = [o for o in offers if o["status"] in ("approved", "ended")]
+    sent = sum(int(o.get("sent_to") or 0) for o in out)
+    uses = [(o, cid) for o in out for cid in (o.get("used_by") or [])]
+    if not uses:  # older offers only stored a used flag
+        uses = [(o, o["target"]) for o in out if o.get("used") and o["target"] in aov.index]
+    sales = sum(float(aov.get(cid, 0) or 0) for _, cid in uses)
+    discount = sum(float(aov.get(cid, 0) or 0) * o["discount_pct"] / 100 for o, cid in uses)
+    ev = data["events"]
+    carts = ev[ev.event.isin(["add_to_cart", "checkout_started"])]
+    baseline = float(carts.converted_within_24h.mean() * 100) if len(carts) else None
+    return {"offers_live_or_done": len(out), "sent": sent, "used": len(uses),
+            "use_rate_pct": round(len(uses) / sent * 100, 1) if sent else None,
+            "est_sales": round(sales), "est_discount": round(discount),
+            "baseline_cart_conversion_pct": round(baseline, 1) if baseline is not None else None,
+            "guardrail_saves": sum(e.get("kind") in ("adjusted", "blocked") for e in audit),
+            "rule_changes": sum(e.get("kind") == "rule_change" for e in audit)}
+
+
 def build(data: dict, segs: pd.DataFrame, rules: dict) -> dict:
     offers, audit = store.get_offers(), store.read_audit(10_000)
     return {
         "store": STORE_NAME, "today": TODAY.isoformat(), "generated_at": datetime.now().isoformat(timespec="seconds"),
         "days_to_diwali": (DIWALI - TODAY).days, "festivals": [{"name": n, "start": a, "end": b} for n, a, b in FESTIVALS],
-        "kpis": kpis(data, segs, offers, audit), "weekly": weekly_revenue(data), "festival_units": weekly_festival_units(data), "segments": segment_table(data, segs),
+        "kpis": kpis(data, segs, offers, audit), "results": results(data, offers, audit), "weekly": weekly_revenue(data), "festival_units": weekly_festival_units(data), "segments": segment_table(data, segs),
         "categories": category_table(data, rules), "offers": offer_rows(offers), "audit": audit_rows(audit),
         "rules": rules,
     }

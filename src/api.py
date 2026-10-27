@@ -96,7 +96,10 @@ def deliver(o: dict) -> int:
                 except Exception as e:
                     log.warning("Could not deliver %s: %s", o["offer_id"], type(e).__name__)
         return sent
-    return asyncio.run(send())
+    sent = asyncio.run(send())
+    if sent:
+        store.update_offer(o["offer_id"], sent_to=int(store.get_offer(o["offer_id"]).get("sent_to") or 0) + sent)
+    return sent
 
 
 def decide(oid: str, action: str) -> dict:

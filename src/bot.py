@@ -224,7 +224,7 @@ async def offer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         log.info("No offer for %s: %s", cid, res["explanation"])  # seller-side reasoning stays out of the customer chat
         await update.message.reply_text(no_offer_message(res["profile"]), parse_mode=HTML)
         return
-    oid = store.add_offer({**res["offer"], "status": "approved"})  # already validated inside offer_for_customer
+    oid = store.add_offer({**res["offer"], "status": "approved", "sent_to": 1})  # already validated inside offer_for_customer
     stored = store.get_offer(oid)
     await update.message.reply_text(messages.customer_message(stored, DATA), parse_mode=HTML, reply_markup=customer_keyboard(oid))
 
@@ -374,11 +374,19 @@ async def live(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _seller_only(update):
         return
+    from src import dashboard
     allo = store.get_offers()
-    n = lambda s: sum(o["status"] == s for o in allo)
+    n = lambda st: sum(o["status"] == st for o in allo)
+    r = dashboard.results(DATA, allo, store.read_audit(10_000))
+    rate = f"{r['use_rate_pct']}%" if r["use_rate_pct"] is not None else "not yet"
+    base = f"\n<i>For comparison: without any offer, {r['baseline_cart_conversion_pct']}% of carts in the store data became an order within 24h.</i>" if r["baseline_cart_conversion_pct"] is not None else ""
     await update.message.reply_text(
-        f"📊 <b>Offer results</b>\n✅ Approved {n('approved')}\n⏳ Pending {n('pending')}\n❌ Rejected {n('rejected')}\n"
-        f"🛡 Blocked by rules {n('blocked')}\n🛒 Used by shoppers {sum(bool(o.get('used')) for o in allo)}\n\n"
+        f"📊 <b>Offer results</b>\n"
+        f"📨 Sent to {r['sent']} customer chat(s) · 🛒 used {r['used']} time(s) · use rate {rate}\n"
+        f"💰 Estimated sales from used offers: ₹{r['est_sales']:,} · discount given: ₹{r['est_discount']:,}\n"
+        f"🛡 Guardrail saves: {r['guardrail_saves']} (offers the rules lowered or blocked){base}\n\n"
+        f"<b>Offers</b>: ✅ approved {n('approved')} · ⏳ waiting {n('pending')} · ❌ rejected {n('rejected')} · "
+        f"🛡 blocked {n('blocked')} · ⏹ ended {n('ended')}\n"
         f"Shoppers on the bot: {len(store.all_shoppers())}", parse_mode=HTML)
 
 
@@ -448,7 +456,9 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await q.answer("Offer not found", show_alert=True)
         return
     if act == "use":
-        store.update_offer(oid, used=True)
+        cid = store.get_shopper(update.effective_chat.id)
+        used_by = sorted(set(o.get("used_by") or []) | ({cid} if cid else set()))
+        store.update_offer(oid, used=True, used_by=used_by)
         await q.answer()
         await q.edit_message_reply_markup(None)
         await q.message.reply_text(f"🛒 Code <code>{escape(o['code'])}</code> applied to your cart. Happy shopping!", parse_mode=HTML)
@@ -494,6 +504,8 @@ async def _deliver(context: ContextTypes.DEFAULT_TYPE, o: dict) -> int:
             sent += 1
         except Exception as e:  # user blocked the bot, etc.
             log.warning("Could not deliver %s to a chat: %s", o["offer_id"], type(e).__name__)
+    if sent:
+        store.update_offer(o["offer_id"], sent_to=int(store.get_offer(o["offer_id"]).get("sent_to") or 0) + sent)
     return sent
 
 

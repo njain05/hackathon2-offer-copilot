@@ -418,7 +418,15 @@ function render(d) {
       ...(LIVE ? [el("td", {}, offerActions(o))] : [])))));
     offerBody = el("div", { class: "scroll" }, t);
   }
-  const offers = block("offers", "Offers", LIVE ? "Everything the rule engine, the AI agent and you proposed, newest first. Approve re-checks the rules, then sends it to the customers' Telegram." : "Everything the rule engine, the AI agent and the seller proposed, newest first. Nothing goes live without the seller's Allow.", panel("", "", offerBody));
+  const R = d.results || {};
+  const resultsStrip = el("div", { class: "strip", style: "margin-bottom:12px" }, ...[
+    ["Sent to customers", R.sent ?? 0, "Telegram chats reached"],
+    ["Used", R.used ?? 0, R.use_rate_pct != null ? `${R.use_rate_pct}% of those sent` : "no uses yet"],
+    ["Est. sales from offers", inr(R.est_sales || 0), "from customers who used one"],
+    ["Est. discount given", inr(R.est_discount || 0), "the cost of those offers"],
+    ["No-offer baseline", R.baseline_cart_conversion_pct != null ? `${R.baseline_cart_conversion_pct}%` : "—", "of carts become an order in 24h without an offer"],
+  ].map(([l, v, n]) => el("div", {}, el("p", { class: "l" }, l), el("p", { class: "v" }, v), el("p", { class: "n" }, n))));
+  const offers = block("offers", "Offers", LIVE ? "Everything the rule engine, the AI agent and you proposed, newest first. Approve re-checks the rules, then sends it to the customers' Telegram." : "Everything the rule engine, the AI agent and the seller proposed, newest first. Nothing goes live without the seller's Allow.", resultsStrip, panel("", "", offerBody));
 
   // guardrails
   const guard = block("guardrails", "Guardrails", "Offers the rules lowered or stopped, and rule changes made from the seller bot.",

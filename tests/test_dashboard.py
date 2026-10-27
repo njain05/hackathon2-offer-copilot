@@ -36,3 +36,15 @@ def test_dashboard_rebuilds_when_offers_change():
         assert d["kpis"]["guardrail_saves"] == 1 and d["audit"][0]["what"] == "Too generous"
     finally:
         store._listeners.clear()
+
+
+def test_results_count_reach_uses_and_estimates():
+    data = load_all()
+    aov = data["customers"].set_index("customer_id").avg_order_value
+    a, b = list(aov.index[:2])
+    offers = [{"offer_id": "OF-1", "status": "approved", "target": "ALL", "discount_pct": 10, "sent_to": 4, "used_by": [a, b]},
+              {"offer_id": "OF-2", "status": "pending", "target": "ALL", "discount_pct": 50, "sent_to": 9, "used_by": [a]}]  # not live: ignored
+    r = dashboard.results(data, offers, [{"kind": "adjusted"}, {"kind": "blocked"}, {"kind": "rule_change"}])
+    assert r["sent"] == 4 and r["used"] == 2 and r["use_rate_pct"] == 50.0
+    assert r["est_sales"] == round(aov[a] + aov[b]) and r["est_discount"] == round((aov[a] + aov[b]) * 0.10)
+    assert r["guardrail_saves"] == 2 and r["rule_changes"] == 1 and 0 < r["baseline_cart_conversion_pct"] < 100
