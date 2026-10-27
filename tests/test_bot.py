@@ -313,3 +313,15 @@ def test_menu_buttons_open_the_right_feature():
     u.message.text = "hello?"
     run(bot.other(u, ctx()))
     assert u.message.reply_text.call_args.kwargs["reply_markup"] is bot.MENU
+
+
+def test_switch_is_seller_only_and_plays_the_chosen_customer():
+    classmate = msg_update(777)
+    run(bot.switch(classmate, ctx("Amit", "Arora")))
+    assert "only for the shop owner" in texts(classmate) and store.get_shopper(777) is None
+    me = msg_update(888)
+    store.set_seller(888)
+    run(bot.switch(me, ctx("Amit", "Arora")))
+    assert store.get_shopper(888) == "C0084" and "Amit Arora" in texts(me)
+    run(bot.switch(me, ctx("Amit")))                      # several Amits -> a list to pick from
+    assert "/switch C" in texts(me)

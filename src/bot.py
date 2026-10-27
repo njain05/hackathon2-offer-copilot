@@ -157,6 +157,31 @@ def welcome_text(cid: str) -> str:
     return intro + "\n\n<i>Hackathon demo: you're playing a synthetic customer.</i>"
 
 
+async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/switch <name or id>: the seller plays a chosen customer (demo and testing). Not for classmates."""
+    if not is_seller(update):
+        await update.message.reply_text("This command is only for the shop owner. Send /start to shop as your own customer.")
+        return
+    q = " ".join(context.args).strip()
+    if not q:
+        await update.message.reply_text("Usage: /switch Amit Arora  or  /switch C0084")
+        return
+    m = find_customers(q)
+    if m.empty:
+        await update.message.reply_text("No customer found.")
+        return
+    if len(m) > 1:
+        lines = "\n".join(f"• /switch {r.customer_id}  {escape(r.name)} ({r.city})" for r in m.head(10).itertuples())
+        await update.message.reply_text(f"Several customers match:\n{lines}", parse_mode=HTML)
+        return
+    cid = m.customer_id.iloc[0]
+    store.assign_shopper(update.effective_chat.id, cid)
+    log.info("Seller now shopping as %s", cid)
+    note = "" if TWO_BOTS else "\n\n<i>Note: with a single bot, offers you approve aren't pushed to the seller's own chat. Tap 🎁 My offer instead.</i>"
+    await update.message.reply_text(f"🔄 You're now shopping as <b>{escape(m.name.iloc[0])}</b> ({cid}).\n\n" + welcome_text(cid) + note,
+                                    parse_mode=HTML, reply_markup=MENU)
+
+
 async def choose_identity(update: Update, kind: str) -> None:
     """Button under /start: become a first-time or a returning synthetic customer."""
     q = update.callback_query
@@ -484,7 +509,7 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
             pass
 
 
-SHOPPER_COMMANDS = [("start", start), ("profile", profile), ("offer", offer), ("offers", offers)]
+SHOPPER_COMMANDS = [("start", start), ("profile", profile), ("offer", offer), ("offers", offers), ("switch", switch)]
 SELLER_COMMANDS = [("seller", seller), ("logout", logout), ("campaigns", campaigns), ("pending", pending), ("live", live),
                    ("stats", stats), ("audit", audit), ("customer", customer)]
 
