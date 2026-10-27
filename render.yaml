@@ -1,0 +1,33 @@
+# Render Blueprint: dashboard + both Telegram bots in one web service.
+# Render: New > Blueprint > pick this repo. Render asks for the secret values below.
+services:
+  - type: web
+    name: offer-copilot
+    runtime: python
+    plan: free
+    region: singapore # closest Render region to Punjab
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m src.serve
+    healthCheckPath: /healthz
+    autoDeployTrigger: commit
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.14.8
+      # Customer bot token (the bot classmates and evaluators use) and the seller bot token, from @BotFather.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: SELLER_BOT_TOKEN
+        sync: false
+      # Private code for /seller and the dashboard login.
+      - key: SELLER_CODE
+        sync: false
+      # Claude, for the AI agent and the chat. Optional: without it the rule engine is used.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # 1 = show the seller code to evaluators (seller bot /start, dashboard login). Set 0 after judging.
+      - key: DEMO_SHOW_SELLER_CODE
+        value: "1"
+# The free plan sleeps after 15 minutes without web visits, which also pauses the bots:
+# add a free UptimeRobot HTTP monitor on https://<service>.onrender.com/healthz every 5 minutes.
+# Render's disk is wiped on restart: offers made while hosted reset (the store data ships with the repo).
+# Only one copy of a bot can run: stop the laptop bots once Render shows "Live".
