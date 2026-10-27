@@ -525,14 +525,14 @@ function showGate(msg) {
   const go = el("button", { class: "btn primary", type: "submit" }, "Open dashboard");
   const form = el("form", { class: "state gate" }, el("h1", {}, "Offer Copilot"), el("p", {}, msg),
     el("div", { class: "field" }, el("label", {}, "Seller code"), input), go);
-  form.addEventListener("submit", e => { e.preventDefault(); setCode(input.value.trim()); load(true); });
+  let hint = "";
+  form.addEventListener("submit", e => { e.preventDefault(); setCode(input.value.trim() || hint); load(true); });
   $("#top").replaceChildren(form); $("#work").replaceChildren(); $("#report").replaceChildren();
   input.focus();
   fetch("/api/demo-access", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(d => {
     if (!d || !d.code) return;
-    input.value = d.code; input.type = "text";
-    form.insertBefore(el("p", { class: "result ok" }, "🎓 Demo access for evaluators: the code is filled in. Press Open dashboard."), go);
-    go.focus();
+    hint = d.code; input.type = "text"; input.placeholder = d.code;   // light grey hint text in the box
+    form.insertBefore(el("p", { class: "hint" }, "🎓 Evaluators: the demo code is shown in the box. Just press Open dashboard."), go);
   }).catch(() => {});
 }
 
