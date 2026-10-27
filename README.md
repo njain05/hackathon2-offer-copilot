@@ -2,6 +2,10 @@
 
 Seller-side personalised offer engine with a Telegram bot. See CLAUDE.md and docs/. (README is completed in slice v8.)
 
+## For evaluators
+
+Demo access is switched on: send **/start** to the seller bot and it shows the seller code to copy; the dashboard login fills it in for you. (The owner turns this off afterwards with `DEMO_SHOW_SELLER_CODE=0` and changes the code.)
+
 ## Run the bot
 
 Two Telegram bots, one program: a **customer bot** (classmates use it; this is the username to share and submit) and a **seller bot** (only you). Both read and write the same `data/state.json`, so an offer you Allow in the seller bot is sent to customers by the customer bot.

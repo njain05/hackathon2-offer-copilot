@@ -255,8 +255,20 @@ async def help_shopper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(SHOPPER_HELP, parse_mode=HTML)
 
 
+def demo_code() -> str | None:
+    """The seller code, only while DEMO_SHOW_SELLER_CODE=1 (evaluator access; turn off and change the code afterwards)."""
+    code = os.getenv("SELLER_CODE", "")
+    return code if code and os.getenv("DEMO_SHOW_SELLER_CODE") == "1" else None
+
+
 async def help_seller(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    text = SELLER_HELP if is_seller(update) else "🧑‍💼 Seller console for Nishtha's Pantry. Send /seller &lt;code&gt; to unlock it."
+    if is_seller(update):
+        await update.message.reply_text(SELLER_HELP, parse_mode=HTML)
+        return
+    text = "🧑‍💼 Seller console for Nishtha's Pantry. Send /seller &lt;code&gt; to unlock it."
+    if code := demo_code():
+        text += (f"\n\n🎓 <b>Demo access for evaluators</b>: tap to copy, then send it:\n<code>/seller {escape(code)}</code>\n\n"
+                 "Then try: <i>What should I offer Amit Arora?</i> or /campaigns")
     await update.message.reply_text(text, parse_mode=HTML)
 
 

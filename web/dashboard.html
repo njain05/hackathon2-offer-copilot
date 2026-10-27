@@ -528,6 +528,12 @@ function showGate(msg) {
   form.addEventListener("submit", e => { e.preventDefault(); setCode(input.value.trim()); load(true); });
   $("#top").replaceChildren(form); $("#work").replaceChildren(); $("#report").replaceChildren();
   input.focus();
+  fetch("/api/demo-access", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(d => {
+    if (!d || !d.code) return;
+    input.value = d.code; input.type = "text";
+    form.insertBefore(el("p", { class: "result ok" }, "🎓 Demo access for evaluators: the code is filled in. Press Open dashboard."), go);
+    go.focus();
+  }).catch(() => {});
 }
 
 async function load(first) {

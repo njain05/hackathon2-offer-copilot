@@ -325,3 +325,14 @@ def test_switch_is_seller_only_and_plays_the_chosen_customer():
     assert store.get_shopper(888) == "C0084" and "Amit Arora" in texts(me)
     run(bot.switch(me, ctx("Amit")))                      # several Amits -> a list to pick from
     assert "/switch C" in texts(me)
+
+
+def test_demo_access_shows_code_only_when_switched_on(monkeypatch):
+    stranger = msg_update(901)
+    monkeypatch.delenv("DEMO_SHOW_SELLER_CODE", raising=False)
+    run(bot.help_seller(stranger, ctx()))
+    assert "secret" not in texts(stranger)
+    monkeypatch.setenv("DEMO_SHOW_SELLER_CODE", "1")
+    stranger.message.reply_text.reset_mock()
+    run(bot.help_seller(stranger, ctx()))
+    assert "/seller secret" in texts(stranger) and "Demo access" in texts(stranger)

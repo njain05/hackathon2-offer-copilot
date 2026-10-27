@@ -385,6 +385,10 @@ class Handler(SimpleHTTPRequestHandler):
         if url.path == "/healthz":  # for uptime monitors; no data, no code needed
             self._json(HTTPStatus.OK, {"ok": True})
             return
+        if url.path == "/api/demo-access":  # evaluator access, only while DEMO_SHOW_SELLER_CODE=1
+            code = bot.demo_code()
+            self._json(HTTPStatus.OK if code else HTTPStatus.NOT_FOUND, {"code": code} if code else {"error": "Demo access is off"})
+            return
         m = re.match(r"^/api/offers/(OF-\d+)/customers$", url.path)
         if m:
             self._run(lambda: offer_customers(m.group(1)))
