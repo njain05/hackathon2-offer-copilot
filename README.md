@@ -4,10 +4,12 @@ An analytics and offer-decision system for an e-commerce store (here: *Nishtha's
 
 ## Try it
 
-| Bot | Link | For |
+| What | Link | For |
 |---|---|---|
 | **Customer bot** | [@perofferengine_Bot](https://t.me/perofferengine_Bot) | Shoppers. `/start` → choose *I'm new here* or *I've shopped before* → tap **🎁 My offer**, **🔥 Today's deals**, **👤 My profile** |
 | **Seller bot** | [@offerengineseller_bot](https://t.me/offerengineseller_bot) | The shop owner / marketing. Unlock with `/seller <code>`, then `/campaigns`, Allow / Reject cards, or just type: *"What should I offer Amit Arora?"*, *"15% off almonds for lapsed customers in Ludhiana"*, *"Raise the Makhana limit to 18%"* |
+| **Dashboard** (sales team) | [offer-copilot-j0h5.onrender.com](https://offer-copilot-j0h5.onrender.com) | Customer groups, results, offers, rules, **Ask Copilot** chat. The demo code shows in the login box: press **Open dashboard**. (Free hosting: the first visit after a quiet spell can take ~30 s.) |
+| **Store offers page** | [/offers.html](https://offer-copilot-j0h5.onrender.com/offers.html) | The public deals customers see |
 
 ## For evaluators
 
