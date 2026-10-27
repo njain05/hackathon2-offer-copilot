@@ -1,10 +1,22 @@
 # Offer Copilot
 
-Seller-side personalised offer engine with a Telegram bot. See CLAUDE.md and docs/. (README is completed in slice v8.)
+An analytics and offer-decision system for an e-commerce store (here: *Nishtha's Pantry*, a dry-fruit shop with synthetic data). It works out which customer should get which offer and why, checks every offer against the store's rules in `rules.yaml`, and delivers offers to customers through Telegram. **AI proposes, rules decide, the seller has the final say.**
+
+## Try it
+
+| Bot | Link | For |
+|---|---|---|
+| **Customer bot** | [@perofferengine_Bot](https://t.me/perofferengine_Bot) | Shoppers. `/start` → choose *I'm new here* or *I've shopped before* → tap **🎁 My offer**, **🔥 Today's deals**, **👤 My profile** |
+| **Seller bot** | [@offerengineseller_bot](https://t.me/offerengineseller_bot) | The shop owner / marketing. Unlock with `/seller <code>`, then `/campaigns`, Allow / Reject cards, or just type: *"What should I offer Amit Arora?"*, *"15% off almonds for lapsed customers in Ludhiana"*, *"Raise the Makhana limit to 18%"* |
 
 ## For evaluators
 
-Demo access is switched on: send **/start** to the seller bot and it shows the seller code to copy; the dashboard login fills it in for you. (The owner turns this off afterwards with `DEMO_SHOW_SELLER_CODE=0` and changes the code.)
+Demo access is switched on: send **/start** to the [seller bot](https://t.me/offerengineseller_bot) and it shows the seller code to copy; the dashboard login shows it too. (The owner turns this off afterwards with `DEMO_SHOW_SELLER_CODE=0` and changes the code.)
+
+Suggested 3-minute tour:
+1. [Customer bot](https://t.me/perofferengine_Bot): `/start` → *I've shopped before* → **🎁 My offer** (a personal, rule-checked offer, or a friendly "no discount" for top customers).
+2. [Seller bot](https://t.me/offerengineseller_bot): `/start`, copy the `/seller …` line and send it, then `/campaigns` → press **✅ Allow** on a card for everyone: the offer arrives in the customer bot.
+3. In the seller bot, type *"Make a Diwali deal: 25% off almonds for everyone"*: the rules lower it to the Nuts cap (12%) and say why. `/audit` shows every offer the rules lowered or blocked.
 
 ## Run the bot
 
