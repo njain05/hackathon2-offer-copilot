@@ -1,3 +1,10 @@
+# PROMPTS — status (27 Oct 2026)
+
+P1 bot ✅ · P2 real catalogue: not done (needs the owner's numbers; the synthetic catalogue stays) · P3 AI path ✅ · P4 offers page ✅ · P5 rules usability ✅ · P6 results and polish ✅.
+Built beyond the plan: two bots, plain-language seller chat, first-time welcome offers, group/top-N targeting, the sales dashboard with Ask Copilot, private seller access, deployment files. Details in docs/PROGRESS.md.
+
+---
+
 # PROMPTS — one per chat, in order. The MVP already exists (see docs/PROGRESS.md).
 
 Every prompt starts with the same hand-off so no chat works blind. Finish, test, commit, update PROGRESS.md, then open a NEW chat.
